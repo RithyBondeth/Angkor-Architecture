@@ -1,19 +1,20 @@
 import type { Building, GameState, Resource } from '../core/types';
 import { footprint, tileAt } from '../core/world';
 import { reconcileBuilders } from './Workforce';
-import { floodUnsafe, productivity } from './survivalRules';
+import { floodUnsafe, builderEfficiency } from './survivalRules';
 
 export class Construction {
   step(state: GameState): Building[] {
     reconcileBuilders(state);
     const completed: Building[] = [];
+    const efficiency = builderEfficiency(state);
     for (const building of state.buildings) {
       const project = building.construction;
       if (!project || project.paused || project.builders === 0) continue;
       if (project.type === 'repair' && floodUnsafe(state, building)) continue;
       project.workDone = Math.min(
         project.workRequired,
-        project.workDone + project.builders * productivity(state),
+        project.workDone + project.builders * efficiency,
       );
       if (project.workDone + 1e-8 < project.workRequired) continue;
       if (project.type !== 'repair') {

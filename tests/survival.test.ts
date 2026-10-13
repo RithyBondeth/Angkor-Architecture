@@ -356,6 +356,8 @@ describe('survival persistence', () => {
     game.step();
     const legacy = JSON.parse(JSON.stringify(game.state));
     legacy.version = 2;
+    legacy.objectivesClaimed = false;
+    delete legacy.progression;
     delete legacy.survival;
     for (const b of legacy.buildings) {
       delete b.condition;
@@ -366,7 +368,7 @@ describe('survival persistence', () => {
       }
     }
     const state = readGameState(legacy)!;
-    expect(state.version).toBe(3);
+    expect(state.version).toBe(4);
     expect(state.survival.hunger).toBe(0);
     expect(state.buildings.find((b) => b.construction)!.construction!.workDone).toBe(2);
     expect(state.buildings.find((b) => b.underlay)!.underlay!.condition).toBe(100);

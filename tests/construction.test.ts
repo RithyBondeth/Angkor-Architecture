@@ -26,6 +26,8 @@ function finish(game: Game) {
 function legacySave() {
   const state = JSON.parse(JSON.stringify(createWorld()));
   state.version = 1;
+  state.objectivesClaimed = false;
+  delete state.progression;
   state.buildings = state.buildings.filter(
     (b: { kind: string }) => !['road', 'canal', 'bridge'].includes(b.kind),
   );
@@ -134,6 +136,7 @@ describe('timed construction', () => {
   });
   it('uses timed temple upgrades and can cancel an upgrade without destroying the sanctuary', () => {
     const game = new Game(createWorld());
+    game.state.resources.merit = 600;
     const temple = game.state.buildings.find((b) => b.kind === 'temple')!;
     const water = tileAt(game.state, 14, 13)!;
     water.terrain = 'canal';
@@ -338,7 +341,7 @@ describe('construction save migration and validation', () => {
   it('migrates version 1 saves and registers existing infrastructure without changing the economy', () => {
     const legacy = legacySave(),
       state = readGameState(legacy)!;
-    expect(state.version).toBe(3);
+    expect(state.version).toBe(4);
     expect(state.resources.wood).toBe(1234);
     expect(state.day).toBe(47);
     expect(state.population).toBe(84);
@@ -354,7 +357,7 @@ describe('construction save migration and validation', () => {
       getItem: () => JSON.stringify({ schema: 1, savedAt: Date.now(), state: legacy }),
     });
     const restored = await new Persistence().load();
-    expect(restored?.version).toBe(3);
+    expect(restored?.version).toBe(4);
     expect(restored?.resources.wood).toBe(1234);
   });
   it('round trips active progress, crew assignments, underlays, and paused projects', () => {

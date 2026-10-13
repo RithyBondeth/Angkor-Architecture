@@ -2,9 +2,23 @@ import { CONFIG } from '../data/config';
 import type { Building, GameState, Resources } from '../core/types';
 import { footprint, tileAt } from '../core/world';
 import { BUILDINGS } from '../data/buildings';
+import { staffedBuildings } from './Workforce';
 
 export function foodDemand(state: GameState): number {
-  return Math.ceil(state.population / CONFIG.survival.residentsPerRice);
+  return (
+    Math.ceil(state.population / CONFIG.survival.residentsPerRice) *
+    (1 - supportStrength(state, 'granary') * 0.25)
+  );
+}
+export function supportStrength(state: GameState, kind: 'granary' | 'workshop'): number {
+  const staffed = staffedBuildings(state);
+  return state.buildings.reduce(
+    (best, b) => (b.kind === kind && staffed.has(b.id) ? Math.max(best, b.condition / 100) : best),
+    0,
+  );
+}
+export function builderEfficiency(state: GameState): number {
+  return productivity(state) * (1 + supportStrength(state, 'workshop') * 0.2);
 }
 export function productivity(state: GameState): number {
   return 1 - state.survival.hunger * 0.0065;

@@ -12,7 +12,9 @@ export type BuildingKind =
   | 'dock'
   | 'gate'
   | 'road'
-  | 'bridge';
+  | 'bridge'
+  | 'granary'
+  | 'workshop';
 export type Category = 'all' | 'water' | 'production' | 'civic' | 'infrastructure';
 export type Overlay = 'none' | 'water' | 'logistics' | 'grid';
 export interface Point {
@@ -64,6 +66,7 @@ export interface BuildingDefinition {
   buildWork: number;
   builders: number;
   production?: { resource: Resource; amount: number };
+  unlockMerit?: number;
 }
 export interface Courier {
   id: string;
@@ -81,7 +84,7 @@ export interface ChronicleEntry {
   icon: string;
 }
 export interface GameState {
-  version: 3;
+  version: 4;
   seed: number;
   width: number;
   height: number;
@@ -98,14 +101,14 @@ export interface GameState {
   nextId: number;
   chronicle: ChronicleEntry[];
   built: Partial<Record<BuildingKind, number>>;
-  objectivesClaimed: boolean;
+  progression: ProgressionState;
 }
 export interface PlacementResult {
   ok: boolean;
   message: string;
 }
 export interface SaveEnvelope {
-  schema: 3;
+  schema: 4;
   savedAt: number;
   state: GameState;
 }
@@ -115,4 +118,26 @@ export interface SurvivalState {
   fedDays: number;
   lastFoodCoverage: number;
   departed: number;
+}
+export type CommissionId =
+  'water-foundation' | 'connected-city' | 'dry-season' | 'royal-granary' | 'temple-city';
+export interface ProgressionState {
+  meritPeak: number;
+  claimed: CommissionId[];
+  delivered: Partial<Resources>;
+  streakDays: number;
+  lastDayTick: number;
+}
+export type CampaignGoal = { label: string; hint: string; target: number } & (
+  | { type: 'build'; kind: BuildingKind }
+  | { type: 'delivered' | 'stockpile'; resource: Resource }
+  | { type: 'population' | 'irrigated-fields' | 'temple-level' }
+  | { type: 'sustain'; condition: 'dry-resilience' | 'healthy-city' }
+);
+export interface RoyalCommission {
+  id: CommissionId;
+  title: string;
+  description: string;
+  goals: readonly CampaignGoal[];
+  reward: Partial<Resources>;
 }

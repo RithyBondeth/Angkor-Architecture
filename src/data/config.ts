@@ -36,12 +36,12 @@ export const ERAS = [
     name: 'The great barays',
     year: 889,
     merit: 200,
-    description: 'Expand your reservoirs and connect the fertile plain.',
+    description: 'Unlock royal granaries to make each harvest sustain more people.',
   },
   {
     name: 'The temple city',
     year: 1113,
     merit: 600,
-    description: 'Raise monuments to a flourishing civilization.',
+    description: 'Unlock architects’ workshops and complete sculpted sanctuaries.',
   },
 ] as const;
