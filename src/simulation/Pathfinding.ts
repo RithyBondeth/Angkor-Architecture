@@ -1,5 +1,6 @@
 import type { Courier, GameState, Point } from '../core/types';
 import { buildingAt, neighbors, tileAt } from '../core/world';
+import { productivity } from './survivalRules';
 
 interface Node {
   point: Point;
@@ -48,9 +49,15 @@ export function traversable(state: GameState, p: Point, mode: TravelMode): boole
     return (
       (['water', 'canal', 'reservoir'].includes(t.terrain) || bridge) &&
       t.water >= 0.45 &&
-      !(building?.kind === 'gate' && !building.construction && !building.enabled)
+      !(
+        building?.kind === 'gate' &&
+        building.construction?.type !== 'build' &&
+        building.condition > 0 &&
+        !building.enabled
+      )
     );
-  if (bridge) return true;
+  if (bridge) return !building || building.condition > 0;
+  if (building?.kind === 'road' && building.condition === 0) return false;
   if (building?.construction?.type === 'build') return false;
   return (
     !['water', 'reservoir'].includes(t.terrain) &&
@@ -70,9 +77,9 @@ export function traversalCost(state: GameState, p: Point, mode: TravelMode) {
         : 1;
 }
 export function movementRate(state: GameState, c: Courier) {
-  if (c.kind === 'barge') return 0.23;
+  if (c.kind === 'barge') return 0.23 * productivity(state);
   const next = c.path[Math.min(Math.floor(c.progress) + 1, c.path.length - 1)]!;
-  return 0.42 / traversalCost(state, next, 'worker');
+  return (0.42 * productivity(state)) / traversalCost(state, next, 'worker');
 }
 /** Manhattan A* with a binary heap and per-node cost; returns null for unreachable destinations. */
 export function findPath(

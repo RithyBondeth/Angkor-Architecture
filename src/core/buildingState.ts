@@ -39,6 +39,8 @@ export function completedBuilding(
     level,
     enabled: true,
     stock: 0,
+    condition: 100,
+    crop: kind === 'paddy' ? { stress: 0, failed: false } : null,
     construction: null,
     investment: initialInvestment(kind, level),
     terrainBefore: captureTerrain(state, kind, x, y),

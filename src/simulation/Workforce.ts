@@ -4,7 +4,7 @@ import type { GameState } from '../core/types';
 export function workforce(state: GameState) {
   const total = Math.floor(state.population * 0.65);
   const demand = state.buildings
-    .filter((b) => b.enabled && !b.construction)
+    .filter((b) => b.enabled && !b.construction && b.condition > 0)
     .reduce((n, b) => n + BUILDINGS[b.kind].workers, 0);
   const builders = state.buildings.reduce(
     (n, b) => n + (b.construction && !b.construction.paused ? b.construction.builders : 0),

@@ -9,7 +9,7 @@ export class WaterSimulation {
     this.delta.fill(0);
     const gateResistance = new Map<number, number>();
     for (const b of state.buildings)
-      if (b.kind === 'gate' && !b.construction && !b.enabled)
+      if (b.kind === 'gate' && b.construction?.type !== 'build' && b.condition > 0 && !b.enabled)
         gateResistance.set(b.y * state.width + b.x, 0.02);
     for (let i = 0; i < state.tiles.length; i++) {
       const tile = state.tiles[i]!;

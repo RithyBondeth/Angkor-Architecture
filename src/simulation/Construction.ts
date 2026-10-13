@@ -1,6 +1,7 @@
 import type { Building, GameState, Resource } from '../core/types';
 import { footprint, tileAt } from '../core/world';
 import { reconcileBuilders } from './Workforce';
+import { floodUnsafe, productivity } from './survivalRules';
 
 export class Construction {
   step(state: GameState): Building[] {
@@ -9,13 +10,20 @@ export class Construction {
     for (const building of state.buildings) {
       const project = building.construction;
       if (!project || project.paused || project.builders === 0) continue;
-      project.workDone = Math.min(project.workRequired, project.workDone + project.builders);
-      if (project.workDone < project.workRequired) continue;
-      for (const [resource, amount] of Object.entries(project.cost)) {
-        const r = resource as Resource;
-        building.investment[r] = (building.investment[r] ?? 0) + amount;
+      if (project.type === 'repair' && floodUnsafe(state, building)) continue;
+      project.workDone = Math.min(
+        project.workRequired,
+        project.workDone + project.builders * productivity(state),
+      );
+      if (project.workDone + 1e-8 < project.workRequired) continue;
+      if (project.type !== 'repair') {
+        for (const [resource, amount] of Object.entries(project.cost)) {
+          const r = resource as Resource;
+          building.investment[r] = (building.investment[r] ?? 0) + amount;
+        }
       }
-      if (project.type === 'upgrade') building.level++;
+      if (project.type === 'repair') building.condition = 100;
+      else if (project.type === 'upgrade') building.level++;
       else {
         for (const p of footprint(building)) {
           const tile = tileAt(state, p.x, p.y)!;
