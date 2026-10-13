@@ -1,0 +1,30 @@
+{
+  "name": "angkor-architect",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "format": "prettier --write src tests *.json *.ts index.html README.md",
+    "format:check": "prettier --check src tests *.json *.ts index.html README.md"
+  },
+  "dependencies": {
+    "@fontsource/cormorant-garamond": "^5.2.8",
+    "@fontsource/dm-sans": "^5.2.8",
+    "@phosphor-icons/web": "^2.1.2",
+    "pixi.js": "^8.22.0"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.10",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vitest": "^4.1.0"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}
