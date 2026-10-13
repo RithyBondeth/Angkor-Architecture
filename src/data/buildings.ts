@@ -11,6 +11,8 @@ export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
     cost: { wood: 70, laterite: 40 },
     workers: 0,
     icon: 'waves',
+    buildWork: 144,
+    builders: 4,
   },
   canal: {
     name: 'Irrigation canal',
@@ -22,6 +24,8 @@ export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
     cost: { wood: 8, laterite: 4 },
     workers: 0,
     icon: 'path',
+    buildWork: 12,
+    builders: 2,
   },
   paddy: {
     name: 'Rice paddy',
@@ -33,6 +37,8 @@ export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
     cost: { wood: 35, laterite: 10 },
     workers: 4,
     icon: 'grains',
+    buildWork: 48,
+    builders: 3,
     production: { resource: 'rice', amount: 16 },
   },
   house: {
@@ -45,6 +51,8 @@ export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
     cost: { wood: 45, laterite: 15 },
     workers: 0,
     icon: 'house-line',
+    buildWork: 64,
+    builders: 3,
   },
   quarry: {
     name: 'Sandstone quarry',
@@ -56,6 +64,8 @@ export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
     cost: { wood: 55, laterite: 25 },
     workers: 6,
     icon: 'mountains',
+    buildWork: 80,
+    builders: 4,
     production: { resource: 'sandstone', amount: 10 },
   },
   temple: {
@@ -68,6 +78,8 @@ export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
     cost: { sandstone: 100, laterite: 80, wood: 30 },
     workers: 8,
     icon: 'bank',
+    buildWork: 240,
+    builders: 4,
     production: { resource: 'merit', amount: 2 },
   },
   lumber: {
@@ -80,6 +92,8 @@ export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
     cost: { wood: 25, laterite: 10 },
     workers: 4,
     icon: 'tree',
+    buildWork: 40,
+    builders: 2,
     production: { resource: 'wood', amount: 12 },
   },
   dock: {
@@ -92,6 +106,8 @@ export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
     cost: { wood: 45, laterite: 20 },
     workers: 2,
     icon: 'boat',
+    buildWork: 64,
+    builders: 3,
   },
   gate: {
     name: 'Floodgate',
@@ -103,6 +119,34 @@ export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
     cost: { wood: 25, laterite: 30 },
     workers: 0,
     icon: 'sliders-horizontal',
+    buildWork: 40,
+    builders: 2,
+  },
+  road: {
+    name: 'Village road',
+    subtitle: 'A faster way home',
+    description:
+      'A dry path that helps workers move faster. Connect dwellings, fields, and workshops with a continuous route.',
+    category: 'infrastructure',
+    size: 1,
+    cost: { wood: 4, laterite: 1 },
+    workers: 0,
+    icon: 'road-horizon',
+    buildWork: 6,
+    builders: 1,
+  },
+  bridge: {
+    name: 'Timber bridge',
+    subtitle: 'Bring both banks together',
+    description:
+      'Spans one river or canal tile. Workers cross on the deck while water and barges continue underneath. Place several adjoining bridges to cross wider water.',
+    category: 'infrastructure',
+    size: 1,
+    cost: { wood: 20, laterite: 8 },
+    workers: 0,
+    icon: 'bridge',
+    buildWork: 48,
+    builders: 2,
   },
 };
 export const RESOURCE_INFO: Record<Resource, { name: string; icon: string; unit: string }> = {
@@ -122,4 +166,6 @@ export const BUILD_ORDER: BuildingKind[] = [
   'lumber',
   'dock',
   'gate',
+  'road',
+  'bridge',
 ];

@@ -2,13 +2,26 @@ import { BUILDINGS } from '../data/buildings';
 import { CONFIG } from '../data/config';
 import { WaterSimulation } from '../simulation/WaterSimulation';
 import { Logistics } from '../simulation/Logistics';
+import { Construction } from '../simulation/Construction';
+import { reconcileBuilders, workforce } from '../simulation/Workforce';
 import { SeasonManager } from './SeasonManager';
 import { buildingAt, footprint, tileAt } from './world';
-import type { Building, BuildingKind, GameState, PlacementResult, Point, Resource } from './types';
+import { captureTerrain } from './buildingState';
+import type {
+  Building,
+  BuildingKind,
+  ConstructionProject,
+  GameState,
+  PlacementResult,
+  Point,
+  Resource,
+  Resources,
+} from './types';
 
 export class Game {
   private readonly water = new WaterSimulation();
   private readonly logistics = new Logistics();
+  private readonly construction = new Construction();
   private readonly listeners = new Set<() => void>();
   constructor(public state: GameState) {}
   subscribe(listener: () => void) {
@@ -22,6 +35,12 @@ export class Game {
     const oldSeason = SeasonManager.at(this.state.day).wet;
     this.state.tick++;
     if (this.state.tick % CONFIG.ticksPerDay === 0) this.state.day++;
+    for (const b of this.construction.step(this.state))
+      this.log(
+        `${BUILDINGS[b.kind].name} completed`,
+        `${BUILDINGS[b.kind].name} is ready to serve your city.`,
+        'hammer',
+      );
     this.water.step(this.state);
     this.logistics.step(this.state);
     if (oldSeason !== SeasonManager.at(this.state.day).wet) {
@@ -39,7 +58,7 @@ export class Game {
       ['canal', 'paddy', 'baray'].every((k) => (this.state.built[k as BuildingKind] ?? 0) > 0)
     ) {
       this.state.objectivesClaimed = true;
-      this.state.resources.merit += 50;
+      this.state.resources.merit = Math.min(CONFIG.maxResource, this.state.resources.merit + 50);
       this.log(
         'A city sustained by water',
         'Your first royal commission is complete. The sovereign grants you 50 merit.',
@@ -53,31 +72,39 @@ export class Game {
     this.notify();
   }
   canPlace(kind: BuildingKind, p: Point): PlacementResult {
+    if (!Number.isInteger(p.x) || !Number.isInteger(p.y))
+      return { ok: false, message: 'Choose a whole tile inside the kingdom.' };
     const def = BUILDINGS[kind];
     const cells = footprint({ ...p, kind });
     if (cells.some((c) => !tileAt(this.state, c.x, c.y)))
       return { ok: false, message: 'Choose a site inside the kingdom.' };
     if (
       cells.some((c) => {
-        const existing = buildingAt(this.state, c.x, c.y);
-        return existing && !(kind === 'gate' && existing.kind === 'canal');
+        const b = buildingAt(this.state, c.x, c.y);
+        return b && !(['gate', 'bridge'].includes(kind) && b.kind === 'canal' && !b.construction);
       })
     )
-      return { ok: false, message: 'There is already a building on this site.' };
+      return { ok: false, message: 'There is already a building or project on this site.' };
+    const tile = tileAt(this.state, p.x, p.y)!;
     if (kind === 'gate') {
-      if (tileAt(this.state, p.x, p.y)!.terrain !== 'canal')
-        return { ok: false, message: 'Floodgates must be placed on an existing canal.' };
+      if (tile.terrain !== 'canal')
+        return { ok: false, message: 'Floodgates must be placed on a completed canal.' };
+    } else if (kind === 'bridge') {
+      if (!['water', 'canal'].includes(tile.terrain))
+        return {
+          ok: false,
+          message: 'Place a timber bridge over a river or completed canal tile.',
+        };
     } else if (
       cells.some((c) =>
-        ['water', 'reservoir', 'canal', 'road'].includes(tileAt(this.state, c.x, c.y)!.terrain),
+        ['water', 'reservoir', 'canal', 'road', 'bridge'].includes(
+          tileAt(this.state, c.x, c.y)!.terrain,
+        ),
       )
-    ) {
+    )
       return { ok: false, message: 'Choose clear land away from waterways and roads.' };
-    }
     if (
-      kind !== 'canal' &&
-      kind !== 'baray' &&
-      kind !== 'gate' &&
+      !['canal', 'baray', 'gate', 'bridge'].includes(kind) &&
       cells.some((c) => tileAt(this.state, c.x, c.y)!.water > 0.8)
     )
       return { ok: false, message: 'This land is flooded. Choose a drier site.' };
@@ -86,7 +113,7 @@ export class Game {
       !cells.some((c) =>
         this.state.tiles.some(
           (t) =>
-            ['water', 'canal'].includes(t.terrain) &&
+            ['water', 'canal', 'bridge'].includes(t.terrain) &&
             Math.abs(t.x - c.x) + Math.abs(t.y - c.y) <= 2,
         ),
       )
@@ -94,22 +121,37 @@ export class Game {
       return { ok: false, message: 'Place a landing within two tiles of a waterway.' };
     for (const [key, cost] of Object.entries(def.cost))
       if (this.state.resources[key as Resource] < cost)
-        return { ok: false, message: `Not enough ${key} to build this.` };
-    const labor = Logistics.workforce(this.state);
-    if (def.workers > labor.total - labor.assigned)
-      return { ok: false, message: 'Build more dwellings to grow your available workforce.' };
-    return { ok: true, message: `Click to build ${def.name.toLowerCase()}.` };
+        return { ok: false, message: `Not enough ${key} to start this project.` };
+    return {
+      ok: true,
+      message: `Click to start ${def.name.toLowerCase()}${workforce(this.state).available === 0 ? ' (waiting for builders)' : ''}.`,
+    };
+  }
+  private project(
+    type: ConstructionProject['type'],
+    cost: Partial<Resources>,
+    workRequired: number,
+    preferred: number,
+  ): ConstructionProject {
+    return {
+      type,
+      cost: { ...cost },
+      workDone: 0,
+      workRequired,
+      builders: Math.min(preferred, workforce(this.state).available),
+      paused: false,
+    };
+  }
+  private pay(cost: Partial<Resources>) {
+    for (const [r, n] of Object.entries(cost)) this.state.resources[r as Resource] -= n;
   }
   place(kind: BuildingKind, p: Point): PlacementResult {
     const result = this.canPlace(kind, p);
     if (!result.ok) return result;
     const def = BUILDINGS[kind];
-    for (const [key, cost] of Object.entries(def.cost))
-      this.state.resources[key as Resource] -= cost;
-    if (kind === 'gate')
-      this.state.buildings = this.state.buildings.filter(
-        (b) => !(b.kind === 'canal' && b.x === p.x && b.y === p.y),
-      );
+    const underlay = ['gate', 'bridge'].includes(kind)
+      ? (buildingAt(this.state, p.x, p.y) ?? null)
+      : null;
     const building: Building = {
       ...p,
       id: `b${this.state.nextId++}`,
@@ -117,29 +159,81 @@ export class Game {
       level: 1,
       enabled: true,
       stock: 0,
+      construction: this.project('build', def.cost, def.buildWork, def.builders),
+      investment: {},
+      terrainBefore: captureTerrain(this.state, kind, p.x, p.y),
+      underlay,
     };
+    this.pay(def.cost);
+    if (underlay) this.state.buildings = this.state.buildings.filter((b) => b.id !== underlay.id);
     this.state.buildings.push(building);
-    this.state.built[kind] = (this.state.built[kind] ?? 0) + 1;
-    for (const c of footprint(building)) {
-      const t = tileAt(this.state, c.x, c.y)!;
-      if (kind === 'baray' || kind === 'canal') {
-        t.terrain = kind === 'baray' ? 'reservoir' : 'canal';
-        t.elevation = kind === 'baray' ? -1 : -0.8;
-      } else if (kind !== 'gate') t.terrain = 'grass';
-    }
-    if (kind === 'house') this.state.population += 8;
     this.log(
-      `${def.name} established`,
-      `A new ${def.name.toLowerCase()} joins your settlement.`,
-      def.icon,
+      `${def.name} planned`,
+      building.construction!.builders
+        ? `Builders are preparing the new ${def.name.toLowerCase()}.`
+        : 'The site is reserved. Assign available builders to begin work.',
+      'hammer',
     );
     this.notify();
-    return { ok: true, message: `${def.name} built. Select another site or press Escape.` };
+    return {
+      ok: true,
+      message: `${def.name} project started. Click the site to manage its builders.`,
+    };
+  }
+  assignBuilders(id: string, count: number): PlacementResult {
+    const b = this.state.buildings.find((b) => b.id === id);
+    const p = b?.construction;
+    if (!p) return { ok: false, message: 'Choose an active construction project.' };
+    if (p.paused) return { ok: false, message: 'Resume this project before assigning builders.' };
+    if (!Number.isInteger(count) || count < 0 || count > CONFIG.maxBuildersPerProject)
+      return {
+        ok: false,
+        message: `Assign between 0 and ${CONFIG.maxBuildersPerProject} builders.`,
+      };
+    if (count > p.builders + workforce(this.state).available)
+      return {
+        ok: false,
+        message: 'No free workers. Release builders from another project or pause production.',
+      };
+    p.builders = count;
+    this.notify();
+    return {
+      ok: true,
+      message: count
+        ? `${count} builders assigned.`
+        : 'Builders released. This project is waiting.',
+    };
+  }
+  pauseProject(id: string): PlacementResult {
+    const b = this.state.buildings.find((b) => b.id === id);
+    const p = b?.construction;
+    if (!p || !b) return { ok: false, message: 'This project is already complete.' };
+    if (p.paused) {
+      const builders = Math.min(BUILDINGS[b.kind].builders, workforce(this.state).available);
+      if (!builders)
+        return {
+          ok: false,
+          message: 'No free workers. Release builders or pause production first.',
+        };
+      p.paused = false;
+      p.builders = builders;
+    } else {
+      p.paused = true;
+      p.builders = 0;
+    }
+    this.notify();
+    return {
+      ok: true,
+      message: p.paused
+        ? 'Construction paused. Builders are available for other work.'
+        : 'Construction resumed.',
+    };
   }
   toggleBuilding(id: string) {
     const b = this.state.buildings.find((b) => b.id === id);
-    if (b) {
+    if (b && !b.construction) {
       b.enabled = !b.enabled;
+      reconcileBuilders(this.state);
       this.notify();
     }
   }
@@ -147,26 +241,123 @@ export class Game {
     const b = this.state.buildings.find((b) => b.id === id);
     if (!b || b.kind !== 'temple' || b.level >= 3)
       return { ok: false, message: 'This monument is already complete.' };
-    const cost = b.level * 80;
-    if (this.state.resources.sandstone < cost || this.state.resources.laterite < 30)
-      return { ok: false, message: `The next stage needs ${cost} sandstone and 30 laterite.` };
+    if (b.construction)
+      return { ok: false, message: 'Finish the current project before starting another stage.' };
+    const cost = { sandstone: b.level * 80, laterite: 30 };
+    if (this.state.resources.sandstone < cost.sandstone || this.state.resources.laterite < 30)
+      return {
+        ok: false,
+        message: `The next stage needs ${cost.sandstone} sandstone and 30 laterite.`,
+      };
     if (WaterSimulation.irrigation(this.state, b.x, b.y, 4) < 0.2)
       return {
         ok: false,
         message: 'Connect a waterway near the temple to stabilize its foundation.',
       };
-    this.state.resources.sandstone -= cost;
-    this.state.resources.laterite -= 30;
-    b.level++;
+    this.pay(cost);
+    b.construction = {
+      type: 'upgrade',
+      cost,
+      workDone: 0,
+      workRequired: 120 * b.level,
+      builders: 0,
+      paused: false,
+    };
+    b.construction.builders = Math.min(BUILDINGS.temple.builders, workforce(this.state).available);
     this.log(
-      'A monument rises',
-      b.level === 3
-        ? 'The sculpted sanctuary is complete. Its merit will carry your city forward.'
-        : 'The sandstone superstructure rises above its laterite foundation.',
+      'A new temple stage begins',
+      'Builders are preparing the next stage of your sanctuary.',
       'bank',
     );
     this.notify();
-    return { ok: true, message: 'Temple construction advanced.' };
+    return { ok: true, message: 'Temple construction started. Assign builders at the sanctuary.' };
+  }
+  refundFor(id: string, cancelOnly = false): Partial<Resources> {
+    const b = this.state.buildings.find((b) => b.id === id);
+    if (!b) return {};
+    const refund: Partial<Resources> = {};
+    const add = (cost: Partial<Resources>, rate: number) => {
+      for (const [key, n] of Object.entries(cost)) {
+        const r = key as Resource;
+        refund[r] = (refund[r] ?? 0) + Math.floor(n * rate);
+      }
+    };
+    if (!cancelOnly) add(b.investment, CONFIG.demolitionRefund);
+    if (b.construction)
+      add(
+        b.construction.cost,
+        1 - ((1 - CONFIG.demolitionRefund) * b.construction.workDone) / b.construction.workRequired,
+      );
+    if (!cancelOnly) {
+      const resource = BUILDINGS[b.kind].production?.resource;
+      if (resource && b.stock) add({ [resource]: b.stock }, 1);
+      for (const c of this.state.couriers)
+        if (c.sourceId === id) add({ [c.resource]: c.amount }, 1);
+    }
+    for (const [key, amount] of Object.entries(refund)) {
+      const resource = key as Resource;
+      refund[resource] = Math.min(amount, CONFIG.maxResource - this.state.resources[resource]);
+    }
+    return refund;
+  }
+  private credit(refund: Partial<Resources>) {
+    for (const [r, n] of Object.entries(refund))
+      this.state.resources[r as Resource] = Math.min(
+        CONFIG.maxResource,
+        this.state.resources[r as Resource] + n,
+      );
+  }
+  cancelConstruction(id: string): PlacementResult {
+    const b = this.state.buildings.find((b) => b.id === id);
+    if (!b?.construction)
+      return {
+        ok: false,
+        message:
+          'This project has already finished. Inspect it to demolish the completed building.',
+      };
+    if (b.construction.type === 'build') return this.demolish(id);
+    this.credit(this.refundFor(id, true));
+    b.construction = null;
+    reconcileBuilders(this.state);
+    this.log(
+      'Temple upgrade canceled',
+      'The existing sanctuary remains. Unused construction materials were recovered.',
+      'hammer',
+    );
+    this.notify();
+    return { ok: true, message: 'Upgrade canceled. The existing sanctuary is operational.' };
+  }
+  demolish(id: string): PlacementResult {
+    const b = this.state.buildings.find((b) => b.id === id);
+    if (!b) return { ok: false, message: 'There is no structure here to remove.' };
+    const pendingBuild = b.construction?.type === 'build';
+    this.credit(this.refundFor(id));
+    this.state.buildings = this.state.buildings.filter((item) => item.id !== id);
+    this.state.couriers = this.state.couriers.filter((c) => c.sourceId !== id);
+    for (const before of b.terrainBefore) {
+      const tile = tileAt(this.state, before.x, before.y)!;
+      tile.terrain =
+        before.terrain === 'forest' && (!pendingBuild || (b.construction?.workDone ?? 0) > 0)
+          ? 'grass'
+          : before.terrain;
+      tile.elevation = before.elevation;
+    }
+    if (b.underlay) this.state.buildings.push(b.underlay);
+    if (b.kind === 'house' && !pendingBuild)
+      this.state.population = Math.max(0, this.state.population - 8);
+    reconcileBuilders(this.state);
+    this.log(
+      pendingBuild ? 'Construction canceled' : `${BUILDINGS[b.kind].name} removed`,
+      'Recoverable materials have been returned to the city.',
+      'hammer',
+    );
+    this.notify();
+    return {
+      ok: true,
+      message: pendingBuild
+        ? 'Project canceled. Materials refunded and builders released.'
+        : 'Structure removed. Materials recovered.',
+    };
   }
   log(title: string, text: string, icon: string) {
     this.state.chronicle.unshift({ tick: this.state.tick, title, text, icon });

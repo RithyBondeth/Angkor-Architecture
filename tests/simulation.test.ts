@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Game } from '../src/core/Game';
 import { Persistence, validateState } from '../src/core/Persistence';
 import { SeasonManager } from '../src/core/SeasonManager';
+import { completedBuilding } from '../src/core/buildingState';
 import { createWorld, random, tileAt } from '../src/core/world';
 import { findPath } from '../src/simulation/Pathfinding';
 import { WaterSimulation } from '../src/simulation/WaterSimulation';
@@ -55,11 +56,7 @@ describe('hydraulic cellular automaton', () => {
       }
       tileAt(s, 10, 10)!.water = 4;
       s.buildings.push({
-        id: 'b1',
-        kind: 'gate',
-        x: 11,
-        y: 10,
-        level: 1,
+        ...completedBuilding(s, 'gate', 11, 10),
         enabled: s === open,
         stock: 0,
       });
@@ -108,6 +105,8 @@ describe('construction and resource loop', () => {
   it('places a floodgate on a newly excavated canal without overlapping records', () => {
     const game = new Game(createWorld());
     expect(game.place('canal', { x: 6, y: 23 }).ok).toBe(true);
+    expect(game.place('gate', { x: 6, y: 23 }).ok).toBe(false);
+    for (let i = 0; i < 6; i++) game.step();
     expect(game.place('gate', { x: 6, y: 23 }).ok).toBe(true);
     expect(game.state.buildings.filter((b) => b.x === 6 && b.y === 23)).toHaveLength(1);
     expect(validateState(game.state)).toBe(true);
@@ -119,7 +118,8 @@ describe('construction and resource loop', () => {
     expect(game.place('baray', { x: 16, y: 16 }).ok).toBe(true);
     const before = game.state.resources.merit;
     game.step();
-    game.step();
+    expect(game.state.resources.merit).toBe(before);
+    for (let i = 0; i < 40; i++) game.step();
     expect(game.state.resources.merit).toBe(before + 50);
     expect(game.state.objectivesClaimed).toBe(true);
   });
@@ -127,8 +127,8 @@ describe('construction and resource loop', () => {
     const s = flatWorld();
     s.tick = 1;
     s.buildings = [
-      { id: 'b1', kind: 'paddy', x: 1, y: 1, level: 1, enabled: true, stock: 0 },
-      { id: 'b2', kind: 'paddy', x: 5, y: 5, level: 1, enabled: true, stock: 0 },
+      { ...completedBuilding(s, 'paddy', 1, 1), id: 'b1' },
+      { ...completedBuilding(s, 'paddy', 5, 5), id: 'b2' },
     ];
     s.couriers = [
       {
@@ -155,6 +155,8 @@ describe('construction and resource loop', () => {
     const wood = game.state.resources.wood;
     expect(game.place('house', { x: 6, y: 23 }).ok).toBe(true);
     expect(game.state.resources.wood).toBe(wood - 45);
+    expect(game.state.population).toBe(84);
+    for (let i = 0; i < 22; i++) game.step();
     expect(game.state.population).toBe(92);
     const after = structuredClone(game.state.resources);
     expect(game.place('house', { x: 6, y: 23 }).ok).toBe(false);

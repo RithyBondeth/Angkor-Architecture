@@ -292,7 +292,15 @@ export class TextureAtlas {
     this.canvas.width = 2048;
     this.canvas.height = 2048;
     this.context = this.canvas.getContext('2d')!;
-    for (const terrain of ['grass', 'forest', 'water', 'canal', 'reservoir', 'road'] as Terrain[])
+    for (const terrain of [
+      'grass',
+      'forest',
+      'water',
+      'canal',
+      'reservoir',
+      'road',
+      'bridge',
+    ] as Terrain[])
       for (let v = 0; v < 5; v++)
         this.add(`${terrain}-${v}`, 80, 56, (c) => this.tile(c, terrain, v));
     for (let v = 0; v < 5; v++) this.add(`tree-${v}`, 128, 160, (c) => this.tree(c, v));
@@ -306,6 +314,8 @@ export class TextureAtlas {
       'lumber',
       'dock',
       'gate',
+      'road',
+      'bridge',
     ] as BuildingKind[])
       this.add(kind, 384, 320, (c) => this.building(c, kind));
     this.add('temple-foundation', 384, 320, (c) => this.building(c, 'temple', 1));
@@ -419,7 +429,14 @@ export class TextureAtlas {
       const thumb = document.createElement('canvas');
       thumb.width = 192;
       thumb.height = 160;
-      thumb.getContext('2d')!.drawImage(this.canvas, this.x, this.y, width, height, 0, 0, 192, 160);
+      if (key === 'bridge' || key === 'road')
+        thumb
+          .getContext('2d')!
+          .drawImage(this.canvas, this.x + 140, this.y + 195, 104, 100, 0, 0, 192, 160);
+      else
+        thumb
+          .getContext('2d')!
+          .drawImage(this.canvas, this.x, this.y, width, height, 0, 0, 192, 160);
       this.thumbnails.set(key, thumb.toDataURL('image/png'));
     }
     this.x += width + 2;
@@ -429,7 +446,7 @@ export class TextureAtlas {
     const rand = random(variant + 41);
     const grass = ['#b2c58d', '#b6c78f', '#b1c28b', '#bacb95', '#b4c58d'][variant]!;
     const water = ['#71a99b', '#77ad9e', '#74aa9c', '#7caf9e', '#73a797'][variant]!;
-    const wet = ['water', 'canal', 'reservoir'].includes(terrain);
+    const wet = ['water', 'canal', 'reservoir', 'bridge'].includes(terrain);
     const top = wet
       ? water
       : terrain === 'road'
@@ -803,6 +820,64 @@ export class TextureAtlas {
         '#807957',
         4,
       );
+    } else if (kind === 'road') {
+      box(c, 0, 0, 44, 22, 4, '#c8bc93', '#aaa27b', '#8f9471');
+      for (let i = 0; i < 6; i++)
+        line(
+          c,
+          [
+            [-32 + i * 10, -4],
+            [i * 10, 12],
+          ],
+          '#e4d9b2',
+          1,
+        );
+    } else if (kind === 'bridge') {
+      box(c, 0, -3, 36, 18, 5, '#bba478', '#8d7954', '#7e7151');
+      for (let i = 0; i < 9; i++)
+        line(
+          c,
+          [
+            [-32 + i * 4, -5 - i * 2],
+            [i * 4, 11 - i * 2],
+          ],
+          '#d8c399',
+          1,
+        );
+      for (const sign of [-1, 1]) {
+        line(
+          c,
+          [
+            [sign * 34, -9],
+            [0, -26],
+          ],
+          '#d3ba87',
+          2,
+        );
+        line(
+          c,
+          [
+            [sign * 34, -9],
+            [0, 8],
+          ],
+          '#c3a775',
+          2,
+        );
+        for (const [x, y] of [
+          [0, -18],
+          [sign * 34, 0],
+          [0, 18],
+        ] as Vertex[])
+          line(
+            c,
+            [
+              [x, y - 5],
+              [x, y - 17],
+            ],
+            '#8d7850',
+            2,
+          );
+      }
     } else if (kind === 'gate') {
       box(c, 0, 0, 33, 16, 5, '#aba685', '#8b906e', '#7b8362');
       box(c, -21, -7, 6, 3, 48);

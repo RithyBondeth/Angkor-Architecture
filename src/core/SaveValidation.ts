@@ -1,0 +1,237 @@
+import { BUILDINGS } from '../data/buildings';
+import { CONFIG } from '../data/config';
+import { completedBuilding, initialInvestment, registerInfrastructure } from './buildingState';
+import { footprint } from './world';
+import { workforce } from '../simulation/Workforce';
+import type { Building, GameState } from './types';
+
+const resources = ['rice', 'wood', 'sandstone', 'laterite', 'merit'];
+const terrains = ['grass', 'forest', 'water', 'canal', 'reservoir', 'road', 'bridge'];
+const finite = (n: unknown, min = 0, max = 1e8): n is number =>
+  typeof n === 'number' && Number.isFinite(n) && n >= min && n <= max;
+const integer = (n: unknown, min = 0, max = 1e8): n is number =>
+  finite(n, min, max) && Number.isInteger(n);
+const record = (n: unknown): n is Record<string, unknown> =>
+  typeof n === 'object' && n !== null && !Array.isArray(n);
+
+/** Validate untrusted local JSON before it can reach the simulation or DOM. */
+function validateShape(value: unknown, legacy = false): boolean {
+  if (!record(value)) return false;
+  const s = value as unknown as GameState;
+  if (
+    s.version !== (legacy ? 1 : 2) ||
+    !integer(s.width, 8, 64) ||
+    !integer(s.height, 8, 64) ||
+    !integer(s.seed) ||
+    !integer(s.nextId, 1) ||
+    !integer(s.tick) ||
+    !integer(s.day, 1) ||
+    !integer(s.population, 0, 100_000) ||
+    !finite(s.happiness, 0, 100) ||
+    ![0, 1, 2, 4].includes(s.speed)
+  )
+    return false;
+  if (
+    !record(s.resources) ||
+    !resources.every((k) => finite(s.resources[k as keyof typeof s.resources], 0, 99999))
+  )
+    return false;
+  if (!Array.isArray(s.tiles) || s.tiles.length !== s.width * s.height) return false;
+  if (
+    !s.tiles.every(
+      (t, i) =>
+        record(t) &&
+        t.x === i % s.width &&
+        t.y === Math.floor(i / s.width) &&
+        terrains.includes(t.terrain) &&
+        finite(t.elevation, -20, 100) &&
+        finite(t.water, 0, 1000) &&
+        finite(t.fertility, 0, 1) &&
+        integer(t.variant, 0, 4),
+    )
+  )
+    return false;
+  if (!Array.isArray(s.buildings) || s.buildings.length > s.tiles.length) return false;
+  const ids = new Set<string>();
+  const occupied = new Set<number>();
+  for (const b of s.buildings) {
+    if (
+      !record(b) ||
+      typeof b.id !== 'string' ||
+      !/^b\d+$/.test(b.id) ||
+      ids.has(b.id) ||
+      !Object.hasOwn(BUILDINGS, b.kind) ||
+      !integer(b.x, 0, s.width - 1) ||
+      !integer(b.y, 0, s.height - 1) ||
+      !integer(b.level, 1, 3) ||
+      typeof b.enabled !== 'boolean' ||
+      !finite(b.stock, 0, 1000)
+    )
+      return false;
+    if (Number(b.id.slice(1)) >= s.nextId) return false;
+    ids.add(b.id);
+    if (!legacy && !validateBuildingMeta(b, s, ids)) return false;
+    const size = BUILDINGS[b.kind].size;
+    if (b.x + size > s.width || b.y + size > s.height) return false;
+    for (let y = b.y; y < b.y + size; y++)
+      for (let x = b.x; x < b.x + size; x++) {
+        const key = y * s.width + x;
+        if (occupied.has(key)) return false;
+        occupied.add(key);
+      }
+  }
+  if (!legacy && workforce(s).assigned > workforce(s).total) return false;
+  if (!Array.isArray(s.couriers) || s.couriers.length > 36) return false;
+  for (const c of s.couriers) {
+    if (
+      !record(c) ||
+      typeof c.id !== 'string' ||
+      !/^c\d+$/.test(c.id) ||
+      ids.has(c.id) ||
+      Number(c.id.slice(1)) >= s.nextId ||
+      typeof c.sourceId !== 'string' ||
+      !s.buildings.some(
+        (b) => b.id === c.sourceId && BUILDINGS[b.kind].production?.resource === c.resource,
+      ) ||
+      !['worker', 'barge'].includes(c.kind) ||
+      !resources.includes(c.resource) ||
+      !finite(c.amount, 0, 1000) ||
+      !Array.isArray(c.path) ||
+      c.path.length < 2 ||
+      c.path.length > s.tiles.length ||
+      !finite(c.progress, 0, c.path.length)
+    )
+      return false;
+    if (
+      !c.path.every(
+        (p, i) =>
+          record(p) &&
+          integer(p.x, 0, s.width - 1) &&
+          integer(p.y, 0, s.height - 1) &&
+          (i === 0 || Math.abs(p.x - c.path[i - 1]!.x) + Math.abs(p.y - c.path[i - 1]!.y) === 1),
+      )
+    )
+      return false;
+    ids.add(c.id);
+  }
+  if (
+    !Array.isArray(s.chronicle) ||
+    s.chronicle.length > 30 ||
+    !s.chronicle.every(
+      (e) =>
+        record(e) &&
+        integer(e.tick) &&
+        typeof e.title === 'string' &&
+        e.title.length < 300 &&
+        typeof e.text === 'string' &&
+        e.text.length < 2000 &&
+        typeof e.icon === 'string' &&
+        /^[a-z-]+$/.test(e.icon),
+    )
+  )
+    return false;
+  return (
+    record(s.built) &&
+    Object.entries(s.built).every(([k, n]) => Object.hasOwn(BUILDINGS, k) && integer(n, 0, 4096)) &&
+    typeof s.objectivesClaimed === 'boolean'
+  );
+}
+
+function validCost(value: unknown): boolean {
+  return (
+    record(value) &&
+    Object.entries(value).every(([key, n]) => resources.includes(key) && integer(n, 0, 99999))
+  );
+}
+function validateBuildingMeta(b: Building, s: GameState, ids: Set<string>): boolean {
+  const size = BUILDINGS[b.kind].size;
+  if (
+    !validCost(b.investment) ||
+    !Array.isArray(b.terrainBefore) ||
+    b.terrainBefore.length !== size * size
+  )
+    return false;
+  const cells = new Set<number>();
+  for (const t of b.terrainBefore) {
+    if (
+      !record(t) ||
+      !integer(t.x, b.x, b.x + size - 1) ||
+      !integer(t.y, b.y, b.y + size - 1) ||
+      !terrains.includes(t.terrain) ||
+      !finite(t.elevation, -20, 100)
+    )
+      return false;
+    const key = t.y * s.width + t.x;
+    if (cells.has(key)) return false;
+    cells.add(key);
+  }
+  if (b.construction !== null) {
+    const p = b.construction;
+    if (
+      !record(p) ||
+      !['build', 'upgrade'].includes(p.type) ||
+      !integer(p.workRequired, 1, 10000) ||
+      !integer(p.workDone, 0, p.workRequired - 1) ||
+      !integer(p.builders, 0, CONFIG.maxBuildersPerProject) ||
+      typeof p.paused !== 'boolean' ||
+      (p.paused && p.builders !== 0) ||
+      !validCost(p.cost)
+    )
+      return false;
+    if (p.type === 'upgrade' && (b.kind !== 'temple' || b.level >= 3)) return false;
+  }
+  if (b.underlay !== null) {
+    const u = b.underlay;
+    if (
+      !['bridge', 'gate'].includes(b.kind) ||
+      !record(u) ||
+      u.kind !== 'canal' ||
+      u.construction !== null ||
+      u.underlay !== null ||
+      u.x !== b.x ||
+      u.y !== b.y ||
+      u.level !== 1 ||
+      typeof u.enabled !== 'boolean' ||
+      !finite(u.stock, 0, 1000) ||
+      typeof u.id !== 'string' ||
+      !/^b\d+$/.test(u.id) ||
+      ids.has(u.id) ||
+      Number(u.id.slice(1)) >= s.nextId
+    )
+      return false;
+    ids.add(u.id);
+    if (!validateBuildingMeta(u, s, ids)) return false;
+  }
+  return true;
+}
+export function validateState(value: unknown): value is GameState {
+  return validateShape(value);
+}
+
+/** Upgrade instant-building saves without restarting the player's settlement. */
+export function readGameState(value: unknown): GameState | null {
+  if (validateState(value)) return structuredClone(value);
+  if (!record(value) || value.version !== 1 || !validateShape(value, true)) return null;
+  const state = structuredClone(value) as unknown as GameState;
+  state.version = 2;
+  for (const b of state.buildings) {
+    b.construction = null;
+    b.investment = initialInvestment(b.kind, b.level);
+    b.underlay = null;
+    b.terrainBefore = footprint(b).map((p) => ({
+      ...p,
+      terrain: b.kind === 'gate' ? 'canal' : 'grass',
+      elevation:
+        b.kind === 'gate'
+          ? state.tiles[p.y * state.width + p.x]!.elevation
+          : Math.max(2.6, state.tiles[p.y * state.width + p.x]!.elevation),
+    }));
+    if (b.kind === 'gate') {
+      const canal = completedBuilding(state, 'canal', b.x, b.y);
+      canal.terrainBefore = [{ x: b.x, y: b.y, terrain: 'grass', elevation: 2.6 }];
+      b.underlay = canal;
+    }
+  }
+  registerInfrastructure(state);
+  return validateState(state) ? state : null;
+}

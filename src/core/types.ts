@@ -1,9 +1,19 @@
 export type Resource = 'rice' | 'wood' | 'sandstone' | 'laterite' | 'merit';
 export type Resources = Record<Resource, number>;
-export type Terrain = 'grass' | 'forest' | 'water' | 'canal' | 'reservoir' | 'road';
+export type Terrain = 'grass' | 'forest' | 'water' | 'canal' | 'reservoir' | 'road' | 'bridge';
 export type BuildingKind =
-  'baray' | 'canal' | 'paddy' | 'house' | 'quarry' | 'temple' | 'lumber' | 'dock' | 'gate';
-export type Category = 'all' | 'water' | 'production' | 'civic';
+  | 'baray'
+  | 'canal'
+  | 'paddy'
+  | 'house'
+  | 'quarry'
+  | 'temple'
+  | 'lumber'
+  | 'dock'
+  | 'gate'
+  | 'road'
+  | 'bridge';
+export type Category = 'all' | 'water' | 'production' | 'civic' | 'infrastructure';
 export type Overlay = 'none' | 'water' | 'logistics' | 'grid';
 export interface Point {
   x: number;
@@ -22,6 +32,23 @@ export interface Building extends Point {
   level: number;
   enabled: boolean;
   stock: number;
+  construction: ConstructionProject | null;
+  investment: Partial<Resources>;
+  terrainBefore: TerrainSnapshot[];
+  /** A completed canal underneath a floodgate or bridge. Only one layer is supported. */
+  underlay: Building | null;
+}
+export interface TerrainSnapshot extends Point {
+  terrain: Terrain;
+  elevation: number;
+}
+export interface ConstructionProject {
+  type: 'build' | 'upgrade';
+  workDone: number;
+  workRequired: number;
+  builders: number;
+  paused: boolean;
+  cost: Partial<Resources>;
 }
 export interface BuildingDefinition {
   name: string;
@@ -32,6 +59,8 @@ export interface BuildingDefinition {
   cost: Partial<Resources>;
   workers: number;
   icon: string;
+  buildWork: number;
+  builders: number;
   production?: { resource: Resource; amount: number };
 }
 export interface Courier {
@@ -50,7 +79,7 @@ export interface ChronicleEntry {
   icon: string;
 }
 export interface GameState {
-  version: 1;
+  version: 2;
   seed: number;
   width: number;
   height: number;
@@ -73,7 +102,7 @@ export interface PlacementResult {
   message: string;
 }
 export interface SaveEnvelope {
-  schema: 1;
+  schema: 2;
   savedAt: number;
   state: GameState;
 }

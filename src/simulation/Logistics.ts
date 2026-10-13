@@ -2,7 +2,8 @@ import { BUILDINGS } from '../data/buildings';
 import { CONFIG } from '../data/config';
 import type { Building, GameState, Point, Resource } from '../core/types';
 import { tileAt } from '../core/world';
-import { findPath, traversable } from './Pathfinding';
+import { findPath, traversable, movementRate } from './Pathfinding';
+import { workforce } from './Workforce';
 import type { TravelMode } from './Pathfinding';
 import { WaterSimulation } from './WaterSimulation';
 
@@ -20,7 +21,8 @@ function approaches(state: GameState, b: Building, mode: TravelMode): Point[] {
 export function deliveryRoute(state: GameState, b: Building): Point[] | null {
   const mode = b.kind === 'quarry' ? 'barge' : 'worker';
   const targets = state.buildings.filter(
-    (t) => t.enabled && (mode === 'barge' ? t.kind === 'dock' : t.kind === 'house'),
+    (t) =>
+      t.enabled && !t.construction && (mode === 'barge' ? t.kind === 'dock' : t.kind === 'house'),
   );
   const starts = approaches(state, b, mode).slice(0, 6);
   for (const target of targets) {
@@ -42,7 +44,7 @@ export class Logistics {
         if (source) source.stock += c.amount;
         return false;
       }
-      c.progress += c.kind === 'barge' ? 0.23 : 0.42;
+      c.progress += movementRate(state, c);
       if (c.progress >= c.path.length - 1) {
         state.resources[c.resource] = Math.min(
           CONFIG.maxResource,
@@ -53,11 +55,13 @@ export class Logistics {
       return true;
     });
     if (state.tick % 10 !== 0) return;
-    let labor = Math.floor(state.population * 0.65);
+    const pool = workforce(state);
+    let labor = pool.total - pool.builders;
     for (const b of state.buildings) {
       const def = BUILDINGS[b.kind];
-      if (!b.enabled || !def.production || labor < def.workers) continue;
+      if (!b.enabled || b.construction || labor < def.workers) continue;
       labor -= def.workers;
+      if (!def.production) continue;
       let amount = def.production.amount * b.level;
       if (b.kind === 'paddy') amount *= WaterSimulation.irrigation(state, b.x, b.y);
       if (b.kind === 'lumber') {
@@ -98,16 +102,13 @@ export class Logistics {
     );
   }
   static workforce(state: GameState) {
-    return {
-      total: Math.floor(state.population * 0.65),
-      assigned: state.buildings
-        .filter((b) => b.enabled)
-        .reduce((n, b) => n + BUILDINGS[b.kind].workers, 0),
-    };
+    return workforce(state);
   }
   static rate(state: GameState, resource: Resource): number {
     return state.buildings
-      .filter((b) => b.enabled && BUILDINGS[b.kind].production?.resource === resource)
+      .filter(
+        (b) => b.enabled && !b.construction && BUILDINGS[b.kind].production?.resource === resource,
+      )
       .reduce((n, b) => {
         const amount = BUILDINGS[b.kind].production!.amount * b.level;
         return (
