@@ -1,51 +1,58 @@
-# 🏛️ Angkor Architect
+<div align="center">
 
-> *SimCity* meets ancient Angkor Wat—manage water grids, feed millions, carve sandstone, and build the greatest hydraulic empire in Southeast Asian history.
+# Angkor Architect
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![PixiJS](https://img.shields.io/badge/PixiJS-E72264?style=flat&logo=pixi.js&logoColor=white)](https://pixijs.com/)
-[![WebGl](https://img.shields.io/badge/WebGL-990000?style=flat&logo=webgl&logoColor=white)](https://www.khronos.org/webgl/)
+**A browser-based isometric city-building and resource-management game inspired by the hydraulic engineering of the medieval Khmer Empire.**
 
----
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![PixiJS](https://img.shields.io/badge/PixiJS-E72264?style=for-the-badge&logo=pixijs&logoColor=white)
+![WebGL](https://img.shields.io/badge/WebGL-990000?style=for-the-badge&logo=webgl&logoColor=white)
 
-## 🌟 Overview
-
-**Angkor Architect** is a zero-install, browser-based isometric simulation game. Players take on the role of the **Royal Master Builder (*Kru Vitu*)** during the golden age of the Khmer Empire (9th–15th century). 
-
-Unlike traditional city builders where road networks dictate growth, **waterways are your primary lifeblood**. You must design, excavate, and regulate the ancient hydraulic grid (*Barays*, dikes, and canals) to survive seasonal monsoon shifts, sustain agriculture, and transport heavy stone blocks from Mount Kulên to construct monumental temple complexes.
+</div>
 
 ---
 
-## ✨ Core Features
+## Overview
 
-* 🌊 **Dynamic Hydraulic Engine:** Experience a seasonal cycle (Wet vs. Dry monsoons). Manage reservoirs (*Barays*) and floodgates to prevent catastrophic dike breaches while keeping rice fields irrigated.
-* 🏗️ **Multi-Tiered Construction Pipeline:** Build monumental structures in realistic historical phases: Moat excavation $\rightarrow$ Laterite foundations $\rightarrow$ Sandstone superstructures $\rightarrow$ Bas-relief carving mini-games.
-* 🗺️ **Historical Eras & Biomes:** Progress through distinct ecological regions from the Tonlé Sap floodplain to the Kulên foothills and the Angkor core city grid.
-* 🎨 **Authentic Khmer Aesthetics:** Isometric visual styling paired with traditional architectural motifs (*Kbach*) and an atmospheric soundscape blending ancient *Pinpeat* melodies.
+Angkor Architect is a planned zero-install, browser-based isometric simulation game: *SimCity* meets ancient Angkor. Players take the role of the **Royal Master Builder (*Kru Vitu*)** during the golden age of the Khmer Empire (9th–15th century).
 
----
+Unlike traditional city builders, where road networks drive growth, **waterways are the lifeblood**. Players design, excavate, and regulate an ancient hydraulic grid of *barays* (reservoirs), dikes, and canals to survive the monsoon seasons, keep rice fields irrigated, and float sandstone from Mount Kulen to build monumental temples.
 
-## 🛠️ Tech Stack & Architecture
+> **Status: pre-production.** This repository currently holds the [Game Design Document](docs/Angkor_Architect_Game_Design_Document.pdf). Implementation has not started yet.
 
-Engineered for high performance (60 FPS) directly in modern web browsers:
+## Planned Features
 
-* **Rendering Engine:** [PixiJS](https://pixijs.com/) (WebGL-accelerated 2D isometric grid rendering)
-* **Language:** [TypeScript](https://www.typescriptlang.org/) for robust, type-safe simulation logic
-* **Simulation Logic:** Custom **Cellular Automata** algorithm for fluid pressure and water propagation across canal nodes
-* **Pathfinding:** **A* Pathfinding** for worker navigation and river barge routing
-* **State Management & Storage:** Local state persistence via `IndexedDB` with compressed JSON states
+- **Dynamic hydraulic engine:** wet and dry monsoon cycles, reservoirs and floodgates, and the risk of dike breaches.
+- **Multi-stage construction:** moat excavation → laterite foundations → sandstone superstructures → bas-relief carving mini-games.
+- **Historical regions:** from the Tonlé Sap floodplain to the Kulen foothills and the Angkor core.
+- **Authentic Khmer aesthetics:** isometric visuals, traditional *kbach* motifs, and a soundscape inspired by *pinpeat* music.
 
----
+## Planned Tech Stack
 
-## 🚀 Getting Started (Local Development)
+| Area | Technology |
+| --- | --- |
+| Rendering | PixiJS (WebGL-accelerated isometric 2D) |
+| Language | TypeScript |
+| Water simulation | Cellular automata for water flow and pressure across canal nodes |
+| Pathfinding | A* for workers and river barges |
+| Persistence | IndexedDB with compressed JSON save states |
 
-### Prerequisites
-Make sure you have [Node.js](https://nodejs.org/) (v18+) and npm installed on your machine.
+## Documentation
 
-### Installation
+- [Game Design Document (PDF)](docs/Angkor_Architect_Game_Design_Document.pdf)
 
-1. Clone the repository:
-   ```bash
-   git clone [https://github.com/Rithybondeth/angkor-architect.git](https://github.com/Rithybondeth/angkor-architect.git)
-   cd angkor-architect
+## Project Structure
+
+```text
+Angkor-Architecture/
+└── docs/
+    └── Angkor_Architect_Game_Design_Document.pdf
+```
+
+## Author
+
+**Rithy Bondeth** — Full Stack Developer & AI Engineer
+
+[![Portfolio](https://img.shields.io/badge/Portfolio-0A0A0A?style=for-the-badge&logo=vercel&logoColor=white)](https://bondeth.dev)
+[![GitHub](https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/RithyBondeth)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/rithy-bondeth-484073282/)
