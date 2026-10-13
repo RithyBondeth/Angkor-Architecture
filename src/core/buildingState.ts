@@ -39,6 +39,7 @@ export function completedBuilding(
     level,
     enabled: true,
     stock: 0,
+    deliveryIssue: null,
     condition: 100,
     crop: kind === 'paddy' ? { stress: 0, failed: false } : null,
     construction: null,

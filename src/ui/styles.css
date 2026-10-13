@@ -3114,3 +3114,81 @@ dialog > p {
   color: var(--muted);
   margin: 8px 0 0;
 }
+
+.logistics-details {
+  margin: 14px 0;
+}
+.delivery-warning {
+  padding: 12px;
+  margin: 12px 0;
+  border: 1px solid var(--border);
+  border-left: 3px solid #b77b42;
+  border-radius: 8px;
+}
+.delivery-warning > strong {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  font-size: 12px;
+}
+.delivery-warning p {
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 8px 0;
+}
+.delivery-warning small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.logistics-details + .detail-row {
+  margin-top: 12px;
+}
+
+#logistics-count {
+  margin-left: auto;
+  color: #b46542;
+  font-size: 10px;
+  font-weight: 700;
+}
+#logistics-count:empty {
+  display: none;
+}
+.deposit-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0;
+  font-size: 9px;
+  color: var(--muted);
+}
+.deposit-key span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.deposit-key i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.sandstone-deposit {
+  background: #ffdf9b;
+  border: 1px solid #ad9160;
+}
+.laterite-deposit {
+  background: #cd6340;
+}
+.timber-deposit {
+  background: #7cb85c;
+}
+@media (max-width: 768px) {
+  #overlay-label {
+    display: none;
+  }
+  #logistics-count {
+    position: absolute;
+    right: 3px;
+    top: 3px;
+  }
+}

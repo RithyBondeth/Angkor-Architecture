@@ -1,6 +1,7 @@
 import { BUILDINGS } from '../data/buildings';
 import { CONFIG } from '../data/config';
 import { WaterSimulation } from '../simulation/WaterSimulation';
+import { remainingDeposit } from '../simulation/Deposits';
 import { Logistics } from '../simulation/Logistics';
 import { Construction } from '../simulation/Construction';
 import { reconcileBuilders, workforce } from '../simulation/Workforce';
@@ -121,6 +122,14 @@ export class Game {
       )
     )
       return { ok: false, message: 'Place a landing within two tiles of a waterway.' };
+    if (
+      ['quarry', 'lateritepit', 'lumber'].includes(kind) &&
+      remainingDeposit(this.state, { ...p, kind }) <= 0
+    )
+      return {
+        ok: false,
+        message: `No ${kind === 'lumber' ? 'harvestable timber within six tiles' : `${kind === 'quarry' ? 'sandstone' : 'laterite'} deposits within three tiles`}. Check the resource deposits overlay (R).`,
+      };
     for (const [key, cost] of Object.entries(def.cost))
       if (this.state.resources[key as Resource] < cost)
         return { ok: false, message: `Not enough ${key} to start this project.` };
@@ -161,6 +170,7 @@ export class Game {
       level: 1,
       enabled: true,
       stock: 0,
+      deliveryIssue: null,
       condition: 100,
       crop: kind === 'paddy' ? { stress: 0, failed: false } : null,
       construction: this.project('build', def.cost, def.buildWork, def.builders),
@@ -381,13 +391,23 @@ export class Game {
     const pendingBuild = b.construction?.type === 'build';
     this.credit(this.refundFor(id));
     this.state.buildings = this.state.buildings.filter((item) => item.id !== id);
-    this.state.couriers = this.state.couriers.filter((c) => c.sourceId !== id);
+    this.state.couriers = this.state.couriers.filter((c) => {
+      if (c.sourceId === id) return false; // Already recovered by refundFor.
+      if (c.targetId !== id) return true;
+      const source = this.state.buildings.find((item) => item.id === c.sourceId);
+      if (source) {
+        source.stock += c.amount;
+        source.deliveryIssue = 'receiver-unavailable';
+      }
+      return false;
+    });
     for (const before of b.terrainBefore) {
       const tile = tileAt(this.state, before.x, before.y)!;
       tile.terrain =
         before.terrain === 'forest' && (!pendingBuild || (b.construction?.workDone ?? 0) > 0)
           ? 'grass'
           : before.terrain;
+      if (tile.terrain !== 'forest') tile.timber = 0;
       tile.elevation = before.elevation;
     }
     if (b.underlay) this.state.buildings.push(b.underlay);

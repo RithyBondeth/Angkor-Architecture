@@ -210,9 +210,12 @@ describe('demolition and resource recovery', () => {
     const source = completedBuilding(s, 'paddy', 8, 8);
     source.stock = 7;
     s.buildings.push(source);
+    const destination = completedBuilding(s, 'house', 2, 2);
+    s.buildings.push(destination);
     s.couriers.push({
       id: `c${s.nextId++}`,
       sourceId: source.id,
+      targetId: destination.id,
       kind: 'worker',
       path: [
         { x: 6, y: 6 },
@@ -261,6 +264,7 @@ describe('roads and bridges', () => {
     const courier = {
       id: 'c0',
       sourceId: 'b0',
+      targetId: 'b0',
       kind: 'worker' as const,
       path: [
         { x: 0, y: 0 },
@@ -341,7 +345,7 @@ describe('construction save migration and validation', () => {
   it('migrates version 1 saves and registers existing infrastructure without changing the economy', () => {
     const legacy = legacySave(),
       state = readGameState(legacy)!;
-    expect(state.version).toBe(4);
+    expect(state.version).toBe(5);
     expect(state.resources.wood).toBe(1234);
     expect(state.day).toBe(47);
     expect(state.population).toBe(84);
@@ -357,7 +361,7 @@ describe('construction save migration and validation', () => {
       getItem: () => JSON.stringify({ schema: 1, savedAt: Date.now(), state: legacy }),
     });
     const restored = await new Persistence().load();
-    expect(restored?.version).toBe(4);
+    expect(restored?.version).toBe(5);
     expect(restored?.resources.wood).toBe(1234);
   });
   it('round trips active progress, crew assignments, underlays, and paused projects', () => {

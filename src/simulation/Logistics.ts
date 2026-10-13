@@ -1,63 +1,56 @@
 import { BUILDINGS } from '../data/buildings';
 import { CONFIG } from '../data/config';
 import type { Building, GameState, Point, Resource } from '../core/types';
-import { findPath, traversable, movementRate } from './Pathfinding';
+import { traversable, movementRate } from './Pathfinding';
 import { workforce, staffedBuildings } from './Workforce';
-import type { TravelMode } from './Pathfinding';
 import { WaterSimulation } from './WaterSimulation';
 import { floodUnsafe, productivity } from './survivalRules';
+import { extractDeposit, remainingDeposit } from './Deposits';
+import {
+  isReceiver,
+  planDelivery,
+  storageCapacity,
+  transportCapacity,
+  transportMode,
+} from './logisticsRules';
 
-function approaches(state: GameState, b: Building, mode: TravelMode): Point[] {
-  const size = BUILDINGS[b.kind].size;
-  const points: Point[] = [];
-  for (let y = b.y - 3; y < b.y + size + 3; y++)
-    for (let x = b.x - 3; x < b.x + size + 3; x++) {
-      if (traversable(state, { x, y }, mode)) points.push({ x, y });
-    }
-  return points.sort(
-    (a, c) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y) - Math.abs(c.x - b.x) - Math.abs(c.y - b.y),
-  );
-}
+/** Compatibility helper for campaign connectivity; receiver selection uses weighted route cost. */
 export function deliveryRoute(state: GameState, b: Building): Point[] | null {
-  const mode = b.kind === 'quarry' ? 'barge' : 'worker';
-  const targets = state.buildings.filter(
-    (t) =>
-      t.enabled &&
-      !t.construction &&
-      t.condition > 0 &&
-      (mode === 'barge' ? t.kind === 'dock' : t.kind === 'house'),
-  );
-  const starts = approaches(state, b, mode).slice(0, 6);
-  for (const target of targets) {
-    const goals = approaches(state, target, mode).slice(0, 6);
-    for (const start of starts)
-      for (const goal of goals) {
-        const path = findPath(state, start, goal, mode);
-        if (path && path.length > 1) return path;
-      }
-  }
-  return null;
+  return planDelivery(state, b).path;
 }
 export class Logistics {
   step(state: GameState): void {
+    const staffed = staffedBuildings(state);
     state.couriers = state.couriers.filter((c) => {
-      // Rerouting is deferred to the next production cycle; a disconnected shipment returns to stock.
-      if (!c.path.every((p) => traversable(state, p, c.kind))) {
-        const source = state.buildings.find((b) => b.id === c.sourceId);
-        if (source) source.stock += c.amount;
+      const source = state.buildings.find((b) => b.id === c.sourceId);
+      const target = state.buildings.find((b) => b.id === c.targetId);
+      if (!source) return false;
+      if (
+        !target ||
+        !isReceiver(state, target, c.kind, staffed) ||
+        !c.path.every((p) => traversable(state, p, c.kind))
+      ) {
+        source.stock += c.amount;
+        source.deliveryIssue =
+          !target || !isReceiver(state, target, c.kind, staffed)
+            ? 'receiver-unavailable'
+            : (planDelivery(state, source).issue ??
+              (c.kind === 'worker' ? 'blocked-land-route' : 'disconnected-waterway'));
         return false;
       }
       c.progress += movementRate(state, c);
       if (c.progress >= c.path.length - 1) {
-        const received = Math.min(c.amount, CONFIG.maxResource - state.resources[c.resource]);
+        const received = Math.min(
+          c.amount,
+          Math.max(0, storageCapacity(state, c.resource) - state.resources[c.resource]),
+        );
+        state.resources[c.resource] += received;
         state.progression.delivered[c.resource] = Math.min(
           1e8,
           (state.progression.delivered[c.resource] ?? 0) + received,
         );
-        state.resources[c.resource] = Math.min(
-          CONFIG.maxResource,
-          state.resources[c.resource] + c.amount,
-        );
+        source.stock += c.amount - received;
+        source.deliveryIssue = received < c.amount ? 'storage-full' : null;
         return false;
       }
       return true;
@@ -65,32 +58,87 @@ export class Logistics {
     if (state.tick % 10 !== 0) return;
     const outputs = Logistics.outputs(state);
     for (const b of state.buildings) {
-      const def = BUILDINGS[b.kind];
-      if (!def.production) continue;
-      const amount = outputs.get(b.id);
-      if (amount === undefined) continue;
+      const production = BUILDINGS[b.kind].production;
+      if (!production) continue;
+      const amount = outputs.get(b.id) ?? 0;
       if (b.kind === 'temple') {
         state.resources.merit = Math.min(CONFIG.maxResource, state.resources.merit + amount);
         continue;
       }
-      b.stock = Math.min(100, b.stock + amount);
-      if (b.stock < 1 || state.couriers.length >= CONFIG.maxCouriers) continue;
-      const path = deliveryRoute(state, b);
-      if (!path) continue;
-      const cargo = Math.min(Math.floor(b.stock), 30);
+      const requested = Math.min(amount, Math.max(0, CONFIG.logistics.sourceBuffer - b.stock));
+      b.stock += ['quarry', 'lateritepit', 'lumber'].includes(b.kind)
+        ? extractDeposit(state, b, requested)
+        : requested;
+    }
+    const producers = state.buildings.filter(
+      (b) => BUILDINGS[b.kind].production && b.kind !== 'temple',
+    );
+    if (!producers.length) return;
+    const start = state.logistics.dispatchCursor % producers.length;
+    let next = (start + 1) % producers.length;
+    for (let i = 0; i < producers.length; i++) {
+      const index = (start + i) % producers.length,
+        b = producers[index]!;
+      if (state.couriers.some((c) => c.sourceId === b.id)) {
+        b.deliveryIssue = null;
+        continue;
+      }
+      b.deliveryIssue = null;
+      if (!b.enabled || b.construction || b.condition <= 0) continue;
+      if (!staffed.has(b.id)) {
+        b.deliveryIssue = 'no-workers';
+        continue;
+      }
+      if (b.stock < 1) {
+        if (['lumber', 'quarry', 'lateritepit'].includes(b.kind) && remainingDeposit(state, b) <= 0)
+          b.deliveryIssue = 'depleted';
+        continue;
+      }
+      const resource = BUILDINGS[b.kind].production!.resource;
+      const reserved = state.couriers.reduce(
+        (n, c) => n + (c.resource === resource ? c.amount : 0),
+        0,
+      );
+      const space = Math.max(
+        0,
+        storageCapacity(state, resource) - state.resources[resource] - reserved,
+      );
+      if (space < 1) {
+        b.deliveryIssue = 'storage-full';
+        continue;
+      }
+      const plan = planDelivery(state, b);
+      if (!plan.path || !plan.targetId) {
+        b.deliveryIssue = plan.issue;
+        continue;
+      }
+      const kind = transportMode(b);
+      if (
+        state.couriers.length >= CONFIG.maxCouriers ||
+        state.couriers.filter((c) => c.kind === kind).length >= transportCapacity(state, kind)
+      ) {
+        b.deliveryIssue = 'transport-full';
+        continue;
+      }
+      const cargo = Math.min(
+        Math.floor(b.stock),
+        kind === 'worker' ? CONFIG.logistics.workerCargo : CONFIG.logistics.bargeCargo,
+        space,
+      );
       b.stock -= cargo;
       state.couriers.push({
         id: `c${state.nextId++}`,
         sourceId: b.id,
-        kind: b.kind === 'quarry' ? 'barge' : 'worker',
-        path,
+        targetId: plan.targetId,
+        kind,
+        path: plan.path,
         progress: 0,
-        resource: def.production.resource,
+        resource,
         amount: cargo,
       });
-      if (b.kind === 'quarry')
-        state.resources.laterite = Math.min(CONFIG.maxResource, state.resources.laterite + 2);
+      next = (index + 1) % producers.length;
     }
+    state.logistics.dispatchCursor = next;
   }
   static workforce(state: GameState) {
     return workforce(state);
@@ -103,27 +151,23 @@ export class Logistics {
       0,
     );
   }
-  /** The HUD and production share staffing, crop, flood, damage, and hunger modifiers. */
+  /** The HUD and production share staffing, remaining deposits, buffer space, and survival modifiers. */
   static outputs(state: GameState): Map<string, number> {
     const outputs = new Map<string, number>();
     const staffed = staffedBuildings(state);
     for (const b of state.buildings) {
       const def = BUILDINGS[b.kind];
-      if (!staffed.has(b.id)) continue;
-      if (!def.production) continue;
+      if (!staffed.has(b.id) || !def.production) continue;
       let amount = (def.production.amount * b.level * productivity(state) * b.condition) / 100;
       if (b.crop)
         amount *= b.crop.failed
           ? 0
           : WaterSimulation.irrigation(state, b.x, b.y, def.size) * (1 - b.crop.stress / 100);
       if (floodUnsafe(state, b)) amount *= 0.2;
-      if (
-        b.kind === 'lumber' &&
-        !state.tiles.some(
-          (t) => t.terrain === 'forest' && Math.abs(t.x - b.x) + Math.abs(t.y - b.y) < 7,
-        )
-      )
-        amount = 0;
+      if (['lumber', 'quarry', 'lateritepit'].includes(b.kind))
+        amount = Math.min(amount, remainingDeposit(state, b));
+      if (b.kind !== 'temple')
+        amount = Math.min(amount, Math.max(0, CONFIG.logistics.sourceBuffer - b.stock));
       outputs.set(b.id, amount);
     }
     return outputs;

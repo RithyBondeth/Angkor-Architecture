@@ -2,6 +2,33 @@ import type { BuildingDefinition, BuildingKind, Resource } from '../core/types';
 import { ERAS } from './config';
 
 export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
+  warehouse: {
+    name: 'City warehouse',
+    subtitle: 'A home for every delivery',
+    description:
+      'Receives nearby land deliveries, adds 1,200 storage per material at full condition, and provides two carts when staffed. Storage remains while service is paused; damage reduces capacity.',
+    category: 'infrastructure',
+    size: 2,
+    cost: { wood: 60, laterite: 30 },
+    workers: 2,
+    icon: 'warehouse',
+    buildWork: 80,
+    builders: 3,
+  },
+  lateritepit: {
+    name: 'Laterite pit',
+    subtitle: 'Earth for the foundations',
+    description:
+      'Extracts finite laterite deposits within three tiles. Carts carry blocks to a dwelling or warehouse over dry land. Use the resource overlay to choose a site.',
+    category: 'production',
+    size: 2,
+    cost: { wood: 50, laterite: 15 },
+    workers: 4,
+    icon: 'wall',
+    buildWork: 72,
+    builders: 3,
+    production: { resource: 'laterite', amount: 8 },
+  },
   baray: {
     name: 'Baray reservoir',
     subtitle: 'Store the monsoon',
@@ -59,7 +86,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
     name: 'Sandstone quarry',
     subtitle: 'Build for the ages',
     description:
-      'Quarry fine sandstone for your monuments. Heavy stone can only reach the city along a navigable waterway to a landing.',
+      'Extract finite sandstone deposits within three tiles for your monuments. Heavy stone can only reach the city along a navigable waterway to a landing.',
     category: 'production',
     size: 2,
     cost: { wood: 55, laterite: 25 },
@@ -87,7 +114,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
     name: 'Woodcutter’s lodge',
     subtitle: 'From forest to city',
     description:
-      'Harvests timber from nearby forest. Workers carry wood to the village over dry land.',
+      'Harvests finite timber from unoccupied forest within six tiles. Exhausted trees are cleared. Workers carry wood to the village over dry land.',
     category: 'production',
     size: 2,
     cost: { wood: 25, laterite: 10 },
@@ -101,7 +128,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
     name: 'River landing',
     subtitle: 'Connect the kingdom',
     description:
-      'Receives sandstone barges. Place beside a river or canal to bring the quarries into your supply network.',
+      'Receives sandstone and supplies one barge when staffed (40 blocks per trip). Place beside a river or canal to bring the quarries into your supply network.',
     category: 'water',
     size: 2,
     cost: { wood: 45, laterite: 20 },
@@ -199,4 +226,6 @@ export const BUILD_ORDER: BuildingKind[] = [
   'bridge',
   'granary',
   'workshop',
+  'warehouse',
+  'lateritepit',
 ];

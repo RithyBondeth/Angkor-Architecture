@@ -2,6 +2,8 @@ import { Application, Container, Graphics, Sprite, Text } from 'pixi.js';
 import { BUILDINGS } from '../data/buildings';
 import { buildingAt, footprint, tileAt } from '../core/world';
 import type { BuildingKind, Overlay, Point } from '../core/types';
+import { resourceDescription } from '../simulation/Deposits';
+import { ISSUE_TEXT } from '../simulation/logisticsRules';
 import { movementRate } from '../simulation/Pathfinding';
 import { constructionSite } from './ConstructionSite';
 import { floodUnsafe } from '../simulation/survivalRules';
@@ -35,6 +37,7 @@ export class WorldRenderer {
   private resizeObserver!: ResizeObserver;
   private unsubscribe?: () => void;
   private readonly reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  onResource: (message: string) => void = () => {};
   onSelect: (id: string | null) => void = () => {};
   onPlace: (message: string, ok: boolean) => void = () => {};
   onHover: (message: string) => void = () => {};
@@ -124,6 +127,15 @@ export class WorldRenderer {
         sprite.label = key;
       }
       sprite.tint = this.overlay === 'water' ? (t.water > 0.45 ? 0x8fc8d4 : 0xa3ab81) : 0xffffff;
+      if (this.overlay === 'resources')
+        sprite.tint =
+          t.mineral && t.mineral.remaining > 0
+            ? t.mineral.resource === 'sandstone'
+              ? 0xffe1a3
+              : 0xed8b61
+            : t.terrain === 'forest' && t.timber > 0
+              ? 0x7cb85c
+              : 0x8e9988;
       const channel = ['water', 'reservoir', 'canal', 'bridge'].includes(t.terrain);
       const flood = this.waterMarkers[i]!;
       flood.alpha = channel ? 0 : Math.min(0.6, t.water * 0.55);
@@ -158,7 +170,9 @@ export class WorldRenderer {
       if (
         !state.buildings.some(
           (b) =>
-            b.id === id && !b.construction && (b.condition < 100 || (b.crop?.stress ?? 0) >= 30),
+            b.id === id &&
+            !b.construction &&
+            (b.condition < 100 || (b.crop?.stress ?? 0) >= 30 || !!b.deliveryIssue),
         )
       ) {
         label.destroy();
@@ -187,7 +201,10 @@ export class WorldRenderer {
         site.label.style.fontSize = 9;
         site.workers.forEach((worker, i) => (worker.visible = !p.paused && i < p.builders));
       }
-      if (!b.construction && (b.condition < 100 || (b.crop?.stress ?? 0) >= 30)) {
+      if (
+        !b.construction &&
+        (b.condition < 100 || (b.crop?.stress ?? 0) >= 30 || !!b.deliveryIssue)
+      ) {
         let label = this.riskLabels.get(b.id);
         if (!label) {
           label = new Text({
@@ -213,7 +230,11 @@ export class WorldRenderer {
               ? 'Crop failed'
               : b.condition < 100
                 ? `${Math.round(b.condition)}% condition`
-                : 'Drought stress';
+                : (b.crop?.stress ?? 0) >= 30
+                  ? 'Drought stress'
+                  : b.deliveryIssue
+                    ? ISSUE_TEXT[b.deliveryIssue].title
+                    : '';
       }
       if (b.kind === 'road' && b.condition < 100)
         this.tileSprites[b.y * state.width + b.x]!.tint = 0xb19b81;
@@ -335,6 +356,10 @@ export class WorldRenderer {
       const b = buildingAt(this.game.state, p.x, p.y);
       this.select(b?.id ?? null);
       this.onSelect(b?.id ?? null);
+      if (this.overlay === 'resources') {
+        const t = tileAt(this.game.state, p.x, p.y);
+        if (t) this.onResource(resourceDescription(t));
+      }
     }
   }
   private move(x: number, y: number) {
@@ -352,7 +377,14 @@ export class WorldRenderer {
     } else if (this.placement) this.onHover(this.game.canPlace(this.placement, p).message);
     else {
       const b = buildingAt(this.game.state, p.x, p.y);
-      this.onHover(b ? BUILDINGS[b.kind].name : 'Drag to explore • Scroll to zoom');
+      const t = tileAt(this.game.state, p.x, p.y);
+      this.onHover(
+        this.overlay === 'resources' && t
+          ? resourceDescription(t)
+          : b
+            ? BUILDINGS[b.kind].name
+            : 'Drag to explore • Scroll to zoom',
+      );
     }
   }
   private drawHighlight() {
@@ -382,6 +414,15 @@ export class WorldRenderer {
   }
   private drawRoutes() {
     this.routes.clear();
+    if (this.overlay === 'resources')
+      for (const t of this.game.state.tiles) {
+        if (!t.mineral || t.mineral.remaining <= 0) continue;
+        const p = toScreen(t.x, t.y);
+        this.routes
+          .circle(p.x, p.y, 6)
+          .fill({ color: t.mineral.resource === 'sandstone' ? 0xffe1a3 : 0xcd6340, alpha: 0.95 })
+          .stroke({ color: 0x594a35, width: 1.5 });
+      }
     if (this.overlay === 'grid')
       for (const t of this.game.state.tiles) {
         const p = toScreen(t.x, t.y);

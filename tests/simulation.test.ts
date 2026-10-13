@@ -129,11 +129,13 @@ describe('construction and resource loop', () => {
     s.buildings = [
       { ...completedBuilding(s, 'paddy', 1, 1), id: 'b1' },
       { ...completedBuilding(s, 'paddy', 5, 5), id: 'b2' },
+      { ...completedBuilding(s, 'house', 10, 10), id: 'b3' },
     ];
     s.couriers = [
       {
         id: 'c3',
         sourceId: 'b2',
+        targetId: 'b3',
         kind: 'worker',
         path: [
           { x: 3, y: 3 },

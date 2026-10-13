@@ -14,9 +14,11 @@ export type BuildingKind =
   | 'road'
   | 'bridge'
   | 'granary'
-  | 'workshop';
+  | 'workshop'
+  | 'warehouse'
+  | 'lateritepit';
 export type Category = 'all' | 'water' | 'production' | 'civic' | 'infrastructure';
-export type Overlay = 'none' | 'water' | 'logistics' | 'grid';
+export type Overlay = 'none' | 'water' | 'logistics' | 'resources' | 'grid';
 export interface Point {
   x: number;
   y: number;
@@ -27,6 +29,8 @@ export interface Tile extends Point {
   water: number;
   fertility: number;
   variant: number;
+  timber: number;
+  mineral: { resource: 'sandstone' | 'laterite'; remaining: number } | null;
 }
 export interface Building extends Point {
   id: string;
@@ -34,6 +38,7 @@ export interface Building extends Point {
   level: number;
   enabled: boolean;
   stock: number;
+  deliveryIssue: DeliveryIssue | null;
   condition: number;
   crop: { stress: number; failed: boolean } | null;
   construction: ConstructionProject | null;
@@ -71,6 +76,7 @@ export interface BuildingDefinition {
 export interface Courier {
   id: string;
   sourceId: string;
+  targetId: string;
   kind: 'worker' | 'barge';
   path: Point[];
   progress: number;
@@ -84,7 +90,7 @@ export interface ChronicleEntry {
   icon: string;
 }
 export interface GameState {
-  version: 4;
+  version: 5;
   seed: number;
   width: number;
   height: number;
@@ -102,13 +108,14 @@ export interface GameState {
   chronicle: ChronicleEntry[];
   built: Partial<Record<BuildingKind, number>>;
   progression: ProgressionState;
+  logistics: { dispatchCursor: number };
 }
 export interface PlacementResult {
   ok: boolean;
   message: string;
 }
 export interface SaveEnvelope {
-  schema: 4;
+  schema: 5;
   savedAt: number;
   state: GameState;
 }
@@ -141,3 +148,20 @@ export interface RoyalCommission {
   goals: readonly CampaignGoal[];
   reward: Partial<Resources>;
 }
+
+export const DELIVERY_ISSUES = [
+  'no-workers',
+  'storage-full',
+  'transport-full',
+  'no-receiver',
+  'receiver-unavailable',
+  'closed-gate',
+  'shallow-water',
+  'water-obstacles',
+  'disconnected-waterway',
+  'flooded-route',
+  'ruined-route',
+  'blocked-land-route',
+  'depleted',
+] as const;
+export type DeliveryIssue = (typeof DELIVERY_ISSUES)[number];

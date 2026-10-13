@@ -7,14 +7,14 @@ function decode(value: unknown): SaveEnvelope | null {
   if (typeof value !== 'object' || value === null) return null;
   const envelope = value as Record<string, unknown>;
   if (
-    ![1, 2, 3, 4].includes(envelope.schema as number) ||
+    ![1, 2, 3, 4, 5].includes(envelope.schema as number) ||
     typeof envelope.savedAt !== 'number' ||
     !Number.isSafeInteger(envelope.savedAt) ||
     envelope.savedAt < 0
   )
     return null;
   const state = readGameState(envelope.state);
-  return state ? { schema: 4, savedAt: envelope.savedAt, state } : null;
+  return state ? { schema: 5, savedAt: envelope.savedAt, state } : null;
 }
 export class Persistence {
   private database: Promise<IDBDatabase> | null = null;
@@ -36,7 +36,7 @@ export class Persistence {
     try {
       localStorage.setItem(
         SAVE_KEY,
-        JSON.stringify({ schema: 4, savedAt: Date.now(), state } satisfies SaveEnvelope),
+        JSON.stringify({ schema: 5, savedAt: Date.now(), state } satisfies SaveEnvelope),
       );
       return true;
     } catch {
@@ -45,7 +45,7 @@ export class Persistence {
   }
   async save(state: GameState): Promise<'IndexedDB' | 'LocalStorage'> {
     const envelope: SaveEnvelope = {
-      schema: 4,
+      schema: 5,
       savedAt: Date.now(),
       state: structuredClone(state),
     };

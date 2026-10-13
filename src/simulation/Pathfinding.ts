@@ -40,7 +40,18 @@ class MinHeap {
   }
 }
 export type TravelMode = 'worker' | 'barge';
-export function traversable(state: GameState, p: Point, mode: TravelMode): boolean {
+export interface RouteOptions {
+  ignoreFlooding?: boolean;
+  ignoreClosedGates?: boolean;
+  ignoreShallows?: boolean;
+  ignoreRuins?: boolean;
+}
+export function traversable(
+  state: GameState,
+  p: Point,
+  mode: TravelMode,
+  options: RouteOptions = {},
+): boolean {
   const t = tileAt(state, p.x, p.y);
   if (!t) return false;
   const building = buildingAt(state, p.x, p.y);
@@ -48,22 +59,33 @@ export function traversable(state: GameState, p: Point, mode: TravelMode): boole
   if (mode === 'barge')
     return (
       (['water', 'canal', 'reservoir'].includes(t.terrain) || bridge) &&
-      t.water >= 0.45 &&
+      (options.ignoreShallows || t.water >= 0.45) &&
       !(
+        !options.ignoreClosedGates &&
         building?.kind === 'gate' &&
         building.construction?.type !== 'build' &&
         building.condition > 0 &&
         !building.enabled
       )
     );
-  if (bridge) return !building || building.condition > 0;
-  if (building?.kind === 'road' && building.condition === 0) return false;
+  if (bridge) return options.ignoreRuins || !building || building.condition > 0;
+  if (!options.ignoreRuins && building?.kind === 'road' && building.condition === 0) return false;
   if (building?.construction?.type === 'build') return false;
   return (
     !['water', 'reservoir'].includes(t.terrain) &&
-    t.water < 0.8 &&
+    (options.ignoreFlooding || t.water < 0.8) &&
     (!building ||
-      ['paddy', 'dock', 'house', 'lumber', 'quarry', 'road', 'canal'].includes(building.kind))
+      [
+        'paddy',
+        'dock',
+        'house',
+        'lumber',
+        'quarry',
+        'lateritepit',
+        'warehouse',
+        'road',
+        'canal',
+      ].includes(building.kind))
   );
 }
 export function traversalCost(state: GameState, p: Point, mode: TravelMode) {
@@ -117,6 +139,58 @@ export function findPath(
       costs.set(k, g);
       parents.set(k, currentKey);
       open.push({ point: p, g, f: g + heuristic(p) });
+    }
+  }
+  return null;
+}
+
+/** Dijkstra with multiple loading cells and destinations; finds the cheapest reachable receiver. */
+export function findPathBetween(
+  state: GameState,
+  starts: Point[],
+  goals: Point[],
+  mode: TravelMode,
+  options: RouteOptions = {},
+): Point[] | null {
+  const key = (p: Point) => p.y * state.width + p.x;
+  const destinations = new Set(goals.map(key));
+  const open = new MinHeap();
+  const costs = new Map<number, number>();
+  const parents = new Map<number, number>();
+  // Cache occupancy and traversability for this search, including negative results.
+  const allowed = new Map<number, boolean>();
+  const canUse = (p: Point) => {
+    if (p.x < 0 || p.y < 0 || p.x >= state.width || p.y >= state.height) return false;
+    const k = key(p);
+    if (!allowed.has(k)) allowed.set(k, traversable(state, p, mode, options));
+    return allowed.get(k)!;
+  };
+  for (const p of starts)
+    if (canUse(p)) {
+      costs.set(key(p), 0);
+      open.push({ point: p, g: 0, f: 0 });
+    }
+  while (open.length) {
+    const current = open.pop()!;
+    const k = key(current.point);
+    if (current.g > costs.get(k)!) continue;
+    if (destinations.has(k)) {
+      const path = [current.point];
+      let parent = k;
+      while (parents.has(parent)) {
+        parent = parents.get(parent)!;
+        path.push({ x: parent % state.width, y: Math.floor(parent / state.width) });
+      }
+      return path.reverse();
+    }
+    for (const p of neighbors(current.point)) {
+      if (!canUse(p)) continue;
+      const next = key(p),
+        g = current.g + traversalCost(state, p, mode);
+      if (g >= (costs.get(next) ?? Infinity)) continue;
+      costs.set(next, g);
+      parents.set(next, k);
+      open.push({ point: p, g, f: g });
     }
   }
   return null;

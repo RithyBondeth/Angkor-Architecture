@@ -45,7 +45,7 @@ export function buildingStatus(b: Building): string {
   if (!b.enabled)
     return b.kind === 'gate'
       ? 'Gate closed'
-      : ['granary', 'workshop'].includes(b.kind)
+      : ['granary', 'workshop', 'warehouse'].includes(b.kind)
         ? 'Service paused'
         : 'Production paused';
   if (b.condition < 100) return 'Flood damage · reduced condition';
