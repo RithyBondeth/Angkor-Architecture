@@ -371,7 +371,7 @@ describe('survival persistence', () => {
       }
     }
     const state = readGameState(legacy)!;
-    expect(state.version).toBe(5);
+    expect(state.version).toBe(6);
     expect(state.survival.hunger).toBe(0);
     expect(state.buildings.find((b) => b.construction)!.construction!.workDone).toBe(2);
     expect(state.buildings.find((b) => b.underlay)!.underlay!.condition).toBe(100);

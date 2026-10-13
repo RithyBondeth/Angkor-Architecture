@@ -44,7 +44,7 @@ export class WaterSimulation {
       const tile = state.tiles[i]!;
       let water = tile.water + this.delta[i]!;
       if (weather) {
-        const channel = ['water', 'reservoir', 'canal', 'bridge'].includes(tile.terrain);
+        const channel = ['water', 'reservoir', 'moat', 'canal', 'bridge'].includes(tile.terrain);
         water += channel ? season.rain - season.evaporation : -season.evaporation * 2;
         if (tile.terrain === 'water') water += (season.wet ? 5.8 : 3.2) > water ? 0.05 : 0;
       }
@@ -59,7 +59,7 @@ export class WaterSimulation {
         const ny = y + dy;
         if (nx < 0 || ny < 0 || nx >= state.width || ny >= state.height) continue;
         const t = state.tiles[ny * state.width + nx]!;
-        if (['water', 'canal', 'reservoir', 'bridge'].includes(t.terrain))
+        if (['water', 'moat', 'canal', 'reservoir', 'bridge'].includes(t.terrain))
           best = Math.max(best, Math.min(1, t.water / 2.5));
       }
     return best;

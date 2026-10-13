@@ -1,3 +1,4 @@
+import { recordReceipt, RATE_WINDOW } from './Feedback';
 import { BUILDINGS } from '../data/buildings';
 import { CONFIG } from '../data/config';
 import type { Building, GameState, Point, Resource } from '../core/types';
@@ -20,6 +21,9 @@ export function deliveryRoute(state: GameState, b: Building): Point[] | null {
 }
 export class Logistics {
   step(state: GameState): void {
+    state.feedback.receipts = state.feedback.receipts.filter(
+      (r) => r.tick > state.tick - RATE_WINDOW,
+    );
     const staffed = staffedBuildings(state);
     state.couriers = state.couriers.filter((c) => {
       const source = state.buildings.find((b) => b.id === c.sourceId);
@@ -45,6 +49,7 @@ export class Logistics {
           Math.max(0, storageCapacity(state, c.resource) - state.resources[c.resource]),
         );
         state.resources[c.resource] += received;
+        recordReceipt(state, c.resource, received);
         state.progression.delivered[c.resource] = Math.min(
           1e8,
           (state.progression.delivered[c.resource] ?? 0) + received,
@@ -62,6 +67,7 @@ export class Logistics {
       if (!production) continue;
       const amount = outputs.get(b.id) ?? 0;
       if (b.kind === 'temple') {
+        recordReceipt(state, 'merit', Math.min(amount, CONFIG.maxResource - state.resources.merit));
         state.resources.merit = Math.min(CONFIG.maxResource, state.resources.merit + amount);
         continue;
       }

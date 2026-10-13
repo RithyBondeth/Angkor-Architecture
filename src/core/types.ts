@@ -1,6 +1,7 @@
 export type Resource = 'rice' | 'wood' | 'sandstone' | 'laterite' | 'merit';
 export type Resources = Record<Resource, number>;
-export type Terrain = 'grass' | 'forest' | 'water' | 'canal' | 'reservoir' | 'road' | 'bridge';
+export type Terrain =
+  'grass' | 'forest' | 'water' | 'canal' | 'moat' | 'reservoir' | 'road' | 'bridge';
 export type BuildingKind =
   | 'baray'
   | 'canal'
@@ -16,7 +17,8 @@ export type BuildingKind =
   | 'granary'
   | 'workshop'
   | 'warehouse'
-  | 'lateritepit';
+  | 'lateritepit'
+  | 'moat';
 export type Category = 'all' | 'water' | 'production' | 'civic' | 'infrastructure';
 export type Overlay = 'none' | 'water' | 'logistics' | 'resources' | 'grid';
 export interface Point {
@@ -39,12 +41,13 @@ export interface Building extends Point {
   enabled: boolean;
   stock: number;
   deliveryIssue: DeliveryIssue | null;
+  engineering: TempleEngineering | null;
   condition: number;
   crop: { stress: number; failed: boolean } | null;
   construction: ConstructionProject | null;
   investment: Partial<Resources>;
   terrainBefore: TerrainSnapshot[];
-  /** A completed canal underneath a floodgate or bridge. Only one layer is supported. */
+  /** A completed canal or moat underneath a floodgate or bridge. Only one layer is supported. */
   underlay: Building | null;
 }
 export interface TerrainSnapshot extends Point {
@@ -90,7 +93,7 @@ export interface ChronicleEntry {
   icon: string;
 }
 export interface GameState {
-  version: 5;
+  version: 6;
   seed: number;
   width: number;
   height: number;
@@ -109,13 +112,14 @@ export interface GameState {
   built: Partial<Record<BuildingKind, number>>;
   progression: ProgressionState;
   logistics: { dispatchCursor: number };
+  feedback: { sinceTick: number; receipts: { tick: number; resource: Resource; amount: number }[] };
 }
 export interface PlacementResult {
   ok: boolean;
   message: string;
 }
 export interface SaveEnvelope {
-  schema: 5;
+  schema: 6;
   savedAt: number;
   state: GameState;
 }
@@ -165,3 +169,8 @@ export const DELIVERY_ISSUES = [
   'depleted',
 ] as const;
 export type DeliveryIssue = (typeof DELIVERY_ISSUES)[number];
+export interface TempleEngineering {
+  stability: number;
+  relief: number[];
+  reliefComplete: boolean;
+}

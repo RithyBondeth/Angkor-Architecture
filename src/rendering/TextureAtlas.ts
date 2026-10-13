@@ -297,6 +297,7 @@ export class TextureAtlas {
       'forest',
       'water',
       'canal',
+      'moat',
       'reservoir',
       'road',
       'bridge',
@@ -307,6 +308,7 @@ export class TextureAtlas {
     for (const kind of [
       'baray',
       'canal',
+      'moat',
       'paddy',
       'house',
       'quarry',
@@ -322,6 +324,7 @@ export class TextureAtlas {
       'lateritepit',
     ] as BuildingKind[])
       this.add(kind, 384, 320, (c) => this.building(c, kind));
+    this.add('temple-towers', 384, 320, (c) => this.building(c, 'temple', 2));
     this.add('temple-foundation', 384, 320, (c) => this.building(c, 'temple', 1));
     this.add('worker', 32, 48, (c) => {
       ellipse(c, 16, 42, 7, 3, '#3f4a3540');
@@ -450,7 +453,7 @@ export class TextureAtlas {
     const rand = random(variant + 41);
     const grass = ['#b2c58d', '#b6c78f', '#b1c28b', '#bacb95', '#b4c58d'][variant]!;
     const water = ['#71a99b', '#77ad9e', '#74aa9c', '#7caf9e', '#73a797'][variant]!;
-    const wet = ['water', 'canal', 'reservoir', 'bridge'].includes(terrain);
+    const wet = ['water', 'moat', 'canal', 'reservoir', 'bridge'].includes(terrain);
     const top = wet
       ? water
       : terrain === 'road'
@@ -629,6 +632,20 @@ export class TextureAtlas {
           const x = side * (70 + i * 12);
           const y = 23 - i * 6;
           box(c, x, y, 4, 2, 13, '#e5d7b1', '#b6a783', '#9d9475');
+        }
+      if (level >= 3)
+        for (let i = 0; i < 7; i++) {
+          line(
+            c,
+            [
+              [42 + i * 12, 18 - i * 6],
+              [42 + i * 12, 5 - i * 6],
+              [48 + i * 12, 9 - i * 6],
+            ],
+            '#6b7056',
+            2,
+          );
+          ellipse(c, 45 + i * 12, 1 - i * 6, 2, 3, '#f2e2b9');
         }
     } else if (kind === 'baray') {
       box(c, 0, 0, 142, 71, 8, '#bbb99a', '#979c7d', '#848d70');

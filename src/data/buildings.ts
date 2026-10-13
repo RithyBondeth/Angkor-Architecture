@@ -2,6 +2,19 @@ import type { BuildingDefinition, BuildingKind, Resource } from '../core/types';
 import { ERAS } from './config';
 
 export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
+  moat: {
+    name: 'Temple moat',
+    subtitle: 'Water around the sanctuary',
+    description:
+      'Excavate within two tiles of a temple. Connect to a filled canal or baray. A wet moat protects foundation stability; keep causeways or bridges for access.',
+    category: 'water',
+    size: 1,
+    cost: { wood: 6, laterite: 2 },
+    workers: 0,
+    icon: 'waves',
+    buildWork: 12,
+    builders: 2,
+  },
   warehouse: {
     name: 'City warehouse',
     subtitle: 'A home for every delivery',
@@ -141,7 +154,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
     name: 'Floodgate',
     subtitle: 'Balance the waters',
     description:
-      'Regulates an existing canal. Open it to let water and barges through, or close it to hold back the monsoon.',
+      'Regulates an existing canal or moat. Open it to let water and barges through, or close it to hold back the monsoon.',
     category: 'water',
     size: 1,
     cost: { wood: 25, laterite: 30 },
@@ -167,7 +180,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
     name: 'Timber bridge',
     subtitle: 'Bring both banks together',
     description:
-      'Spans one river or canal tile. Workers cross on the deck while water and barges continue underneath. Place several adjoining bridges to cross wider water.',
+      'Spans one river, canal, or moat tile. Workers cross on the deck while water and barges continue underneath. Place several adjoining bridges to cross wider water.',
     category: 'infrastructure',
     size: 1,
     cost: { wood: 20, laterite: 8 },
@@ -228,4 +241,5 @@ export const BUILD_ORDER: BuildingKind[] = [
   'workshop',
   'warehouse',
   'lateritepit',
+  'moat',
 ];

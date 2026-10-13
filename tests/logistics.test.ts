@@ -244,7 +244,7 @@ describe('save migration', () => {
     }
     for (const c of old.couriers) delete c.targetId;
     const restored = readGameState(old)!;
-    expect(restored.version).toBe(5);
+    expect(restored.version).toBe(6);
     expect(restored.couriers[0]!.targetId).toBe(house.id);
     expect(restored.buildings.find((b) => b.id === source.id)!.stock).toBe(7);
     expect(restored.progression).toEqual(s.progression);
