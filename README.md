@@ -1,6 +1,35 @@
+<div align="center">
+
 # Angkor Architect
 
+**A browser-based isometric city-building and resource-management game inspired by the hydraulic engineering of the medieval Khmer Empire.**
+
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![PixiJS](https://img.shields.io/badge/PixiJS-E72264?style=for-the-badge&logo=pixijs&logoColor=white)
+![WebGL](https://img.shields.io/badge/WebGL-990000?style=for-the-badge&logo=webgl&logoColor=white)
+
+</div>
+
+---
+
+## Overview
+
+Angkor Architect is a browser-based isometric simulation game: _SimCity_ meets ancient Angkor. Players take the role of the **Royal Master Builder (_Kru Vitu_)** during the golden age of the Khmer Empire (9th–15th century).
+
+**Waterways are the lifeblood** of the city. Design, excavate, and regulate a hydraulic grid of _barays_ (reservoirs) and canals to survive the monsoon seasons, keep rice fields irrigated, and float sandstone to build monumental temples.
+
 A playable foundation for a web-based isometric city builder inspired by the hydraulic cities of the Khmer Empire. Built with **strict TypeScript, PixiJS 8, and Vite**. No account, server, or external image service is required.
+
+## Tech stack
+
+| Area             | Technology                                                 |
+| ---------------- | ---------------------------------------------------------- |
+| Rendering        | PixiJS (WebGL-accelerated isometric 2D)                    |
+| Language         | TypeScript with strict mode                                |
+| Build tool       | Vite                                                       |
+| Water simulation | Cellular automata for elevation and pressure-driven flow   |
+| Pathfinding      | A* for workers and river barges                            |
+| Persistence      | IndexedDB with a LocalStorage backup and JSON save exports |
 
 ## Run locally
 
@@ -102,4 +131,20 @@ Settings supports downloading and importing JSON saves, an evening interface, an
 
 This prototype includes a five-chapter royal campaign, permanent merit unlocks, working granary and workshop benefits, the resource loop, drought-driven crop failures and recovery, flood damage and timed repairs, food shortages and population consequences, timed construction and temple upgrades, shared builder assignment, demolition and refunds, buildable roads and bridges, hydraulic simulation, routing, rendering, and local persistence. Builder labor is pooled; the crews drawn at sites do not yet travel there as individual agents. Detailed foundation stability, erosion and silt, a bas-relief minigame, audio, campaign maps, cloud saves, and a PWA are future work. Historical themes guide the visual language, while map dimensions, units, dates, resource rates, and progression are game balance abstractions.
 
-The project’s design reference is in `docs/Angkor_Architect_Game_Design_Document.pdf`.
+The design document also envisions regional campaigns from the Tonlé Sap floodplain to the Kulen foothills, Khmer kbach ornament, and a soundscape inspired by pinpeat music.
+
+## Documentation
+
+- [Game Design Document (PDF)](docs/Angkor_Architect_Game_Design_Document.pdf)
+
+## Author
+
+**Rithy Bondeth** — Full Stack Developer & AI Engineer
+
+[![Portfolio](https://img.shields.io/badge/Portfolio-0A0A0A?style=for-the-badge&logo=vercel&logoColor=white)](https://bondeth.dev)
+[![GitHub](https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/RithyBondeth)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/rithy-bondeth-484073282/)
+
+## License
+
+Distributed under the MIT License. See [`LICENSE`](LICENSE) for details.
