@@ -2914,3 +2914,203 @@ dialog > p {
 .survival-site:hover strong {
   text-decoration: underline;
 }
+
+.campaign-note {
+  font-size: 11px;
+  line-height: 1.65;
+  color: var(--muted);
+  margin: 12px 0;
+}
+.campaign-goal {
+  align-items: flex-start;
+}
+.campaign-goal strong {
+  font-size: 11px;
+  line-height: 1.5;
+}
+.campaign-goal small {
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.goal-count {
+  font-size: 10px;
+  white-space: nowrap;
+  padding-top: 3px;
+  color: var(--muted);
+}
+.commission-reward {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.commission-reward strong {
+  font-size: 10px;
+  line-height: 1.6;
+}
+.campaign-roadmap {
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
+}
+.campaign-chapter {
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 12px;
+}
+.campaign-chapter.current {
+  border-color: var(--warning-border);
+}
+.campaign-chapter summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  list-style: none;
+}
+.campaign-chapter summary::-webkit-details-marker {
+  display: none;
+}
+.campaign-chapter summary:focus-visible {
+  outline: 2px solid var(--warning-border);
+  outline-offset: 4px;
+}
+.campaign-chapter summary > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+.campaign-chapter summary strong {
+  display: block;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.campaign-chapter summary small {
+  display: block;
+  font-size: 9px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.campaign-chapter summary > .ph {
+  font-size: 12px;
+}
+.chapter-number {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--pale-green);
+  color: var(--green);
+  font-size: 11px;
+}
+.chapter-number .ph {
+  font-size: 12px;
+}
+.chapter-requirements {
+  padding-left: 16px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.chapter-requirements li {
+  margin: 12px 0;
+}
+.chapter-requirements small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+}
+.chapter-reward {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 10px;
+  line-height: 1.7;
+  color: var(--green);
+  margin: 12px 0 0;
+}
+.chapter-reward .ph {
+  flex-shrink: 0;
+  font-size: 14px;
+}
+.campaign-victory {
+  padding: 12px;
+  background: var(--pale-green);
+  color: var(--green);
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.unlock-list {
+  margin-top: 22px;
+}
+.unlock-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--border);
+}
+.unlock-row > .ph {
+  font-size: 16px;
+  color: var(--muted);
+  padding-top: 2px;
+}
+.unlock-row.unlocked > .ph {
+  color: var(--green);
+}
+.unlock-row > span {
+  flex: 1;
+}
+.unlock-row strong {
+  font-size: 11px;
+  line-height: 1.5;
+}
+.unlock-row small {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.unlock-row > b {
+  font-size: 12px;
+  color: var(--green);
+  text-align: right;
+  font-weight: 500;
+}
+.unlock-row > b small {
+  font-size: 9px;
+}
+.building-card.locked .building-art img {
+  filter: grayscale(0.65);
+  opacity: 0.5;
+}
+.building-card.locked {
+  border-style: dashed;
+}
+.unlock-cost {
+  color: var(--muted);
+}
+.support-benefit {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  margin: 12px 0;
+  background: var(--pale-green);
+}
+.support-benefit strong {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 11px;
+  color: var(--green);
+}
+.support-benefit strong .ph {
+  font-size: 15px;
+}
+.support-benefit p {
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 8px 0 0;
+}

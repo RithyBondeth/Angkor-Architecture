@@ -1,4 +1,5 @@
 import type { BuildingDefinition, BuildingKind, Resource } from '../core/types';
+import { ERAS } from './config';
 
 export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
   baray: {
@@ -148,6 +149,34 @@ export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
     buildWork: 48,
     builders: 2,
   },
+  granary: {
+    name: 'Royal granary',
+    subtitle: 'Make every harvest last',
+    description:
+      'Organized storage and careful rationing reduce daily rice needs by up to 25%. Requires two operating workers. Damage weakens the benefit; additional granaries do not stack.',
+    category: 'production',
+    size: 2,
+    cost: { wood: 55, laterite: 35 },
+    workers: 2,
+    icon: 'barn',
+    buildWork: 96,
+    builders: 3,
+    unlockMerit: ERAS[1].merit,
+  },
+  workshop: {
+    name: 'Architect’s workshop',
+    subtitle: 'Teach the hands that build',
+    description:
+      'Master builders improve construction, repairs, and temple upgrades by up to 20%. Requires three operating workers. Damage weakens the benefit; additional workshops do not stack.',
+    category: 'civic',
+    size: 2,
+    cost: { wood: 70, laterite: 50, sandstone: 35 },
+    workers: 3,
+    icon: 'ruler',
+    buildWork: 120,
+    builders: 3,
+    unlockMerit: ERAS[2].merit,
+  },
 };
 export const RESOURCE_INFO: Record<Resource, { name: string; icon: string; unit: string }> = {
   rice: { name: 'Rice', icon: 'grains', unit: 'sacks' },
@@ -168,4 +197,6 @@ export const BUILD_ORDER: BuildingKind[] = [
   'gate',
   'road',
   'bridge',
+  'granary',
+  'workshop',
 ];

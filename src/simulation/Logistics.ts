@@ -2,7 +2,7 @@ import { BUILDINGS } from '../data/buildings';
 import { CONFIG } from '../data/config';
 import type { Building, GameState, Point, Resource } from '../core/types';
 import { findPath, traversable, movementRate } from './Pathfinding';
-import { workforce } from './Workforce';
+import { workforce, staffedBuildings } from './Workforce';
 import type { TravelMode } from './Pathfinding';
 import { WaterSimulation } from './WaterSimulation';
 import { floodUnsafe, productivity } from './survivalRules';
@@ -49,6 +49,11 @@ export class Logistics {
       }
       c.progress += movementRate(state, c);
       if (c.progress >= c.path.length - 1) {
+        const received = Math.min(c.amount, CONFIG.maxResource - state.resources[c.resource]);
+        state.progression.delivered[c.resource] = Math.min(
+          1e8,
+          (state.progression.delivered[c.resource] ?? 0) + received,
+        );
         state.resources[c.resource] = Math.min(
           CONFIG.maxResource,
           state.resources[c.resource] + c.amount,
@@ -101,12 +106,10 @@ export class Logistics {
   /** The HUD and production share staffing, crop, flood, damage, and hunger modifiers. */
   static outputs(state: GameState): Map<string, number> {
     const outputs = new Map<string, number>();
-    const pool = workforce(state);
-    let labor = pool.total - pool.builders;
+    const staffed = staffedBuildings(state);
     for (const b of state.buildings) {
       const def = BUILDINGS[b.kind];
-      if (!b.enabled || b.construction || b.condition === 0 || labor < def.workers) continue;
-      labor -= def.workers;
+      if (!staffed.has(b.id)) continue;
       if (!def.production) continue;
       let amount = (def.production.amount * b.level * productivity(state) * b.condition) / 100;
       if (b.crop)

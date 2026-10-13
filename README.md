@@ -14,7 +14,7 @@ npm run dev
 Open the URL printed by Vite, normally `http://localhost:5173`.
 
 ```sh
-npm test           # Simulation, survival, routing, construction, and save validation
+npm test           # Simulation, progression, survival, routing, construction, and save validation
 npm run typecheck  # Strict TypeScript checks
 npm run build      # Type check and production bundle
 npm run preview    # Serve the production build
@@ -38,7 +38,9 @@ Completed buildings can be inspected, paused, upgraded, or removed. The trash to
 - **Demolition and refunds:** Completed structures return 50% of invested materials, scaled by remaining condition and rounded down per resource. Unfinished projects return 100% at zero progress, decreasing linearly to 50% at completion. Stored goods and dispatched cargo are recovered when their producer is removed, subject to the city’s resource storage limits. Canceling a temple upgrade preserves the existing sanctuary. Demolishing an intact dwelling removes up to eight residents. Removing a ruined dwelling only displaces any residents still above the remaining housing capacity, so already displaced residents are not removed twice. Ruined homes gradually displace up to two residents per day; repairing them restores space for resettlement. The starting settlement includes housing for 60 people plus eight per intact dwelling.
 - **Water conservation:** Removing a canal or reservoir restores the terrain elevation while retaining its current water. Reclaiming filled waterways can flood neighboring land; the confirmation preview explains this effect.
 - **Temples:** Sanctuaries generate merit and progress through foundations, towers, and reliefs. Upgrades are timed projects requiring nearby water, sandstone, laterite, and an assigned crew. Merit production pauses during an upgrade.
-- **Royal commission:** Complete a canal, a paddy, and a baray to earn 50 merit. Planning sites alone does not complete milestones.
+- **Royal campaign:** Five linked commissions take the city from hydraulic foundations through connected neighborhoods, dry-season resilience, food supply, and a completed temple city. The overview shows the current commission; Royal commissions shows all chapters and their rewards. Rewards are granted automatically while the simulation runs, once every objective in the active chapter is met. Completed projects count toward building goals; starting structures and canceled sites do not. Population, rice reserves, healthy irrigation, and an operational temple are checked against the current city. Sustained objectives count consecutive daily checks in their own chapter and reset when conditions lapse.
+- **Merit unlocks:** At 200 merit, the Great barays era unlocks the royal granary. A staffed, completed granary reduces daily rice needs by up to 25%. At 600 merit, the Temple city era unlocks the architect’s workshop and final temple stage. A staffed workshop increases builder work by up to 20%, including repairs and temple upgrades. Damage reduces support benefits; paused, ruined, unstaffed, or unfinished support buildings provide no benefit. Multiple copies use the strongest active benefit and do not stack. Earlier temple stages and basic infrastructure remain available from the start. Existing buildings and projects keep working.
+- **Permanent progression:** Era unlocks use the highest merit reached, so they remain available if the current balance falls. Commission rewards can be earned only once. Delivery objectives count actual rice or sandstone received from couriers, up to available storage space; starting resources, refunds, returned shipments, and rewards do not count. After all five chapters, the city continues in free play.
 
 | Controls           | Action                                  |
 | ------------------ | --------------------------------------- |
@@ -53,20 +55,32 @@ Completed buildings can be inspected, paused, upgraded, or removed. The trash to
 
 The speed controls run the simulation at 1×, 2×, or 4×. A day lasts six fixed simulation ticks; wet and dry seasons last 90 days each.
 
+## Royal campaign
+
+| Chapter                        | Objectives                                                                                                                                                                | Reward                         |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| A city sustained by water      | Complete a new canal, paddy, and baray                                                                                                                                    | 50 merit                       |
+| Bring the settlement together  | Complete two dwellings, five road tiles, and one bridge                                                                                                                   | 100 merit, 40 timber, 100 rice |
+| Carry the city through drought | Three healthy irrigated fields, 150 rice in reserve, and five consecutive fully fed dry-season days with at least two healthy irrigated fields and no hunger              | 200 merit, 50 laterite         |
+| A kingdom well supplied        | Complete a granary, receive 200 rice deliveries, and maintain 100 residents                                                                                               | 150 merit, 60 timber           |
+| An enduring temple city        | Complete a workshop and an operational stage-three temple, receive 100 sandstone, maintain 120 residents, and sustain seven fully fed days with no hunger or ruined homes | 250 merit, 40 sandstone        |
+
+Delivered cargo totals accumulate from the beginning of the campaign; daily streaks begin only when their chapter becomes active. Historic construction goals remain fulfilled after demolition. Live conditions can regress before a commission is awarded. Rewards respect resource storage limits.
+
 ## Architecture
 
 ```text
 src/
 ├── core/          # Typed world, commands, construction state, saves and migration
-├── simulation/    # Water, crops, survival, A*, logistics, repairs and shared workforce
+├── simulation/    # Water, survival, campaign progression, A*, logistics, repairs, workforce
 ├── rendering/     # PixiJS scene, texture atlas, scaffolding, isometric mapping, camera
 ├── ui/            # HUD, survival warnings, project controls, refunds, responsive styles
-├── data/          # Balance parameters, resource/building definitions, era thresholds
+├── data/          # Balance, buildings, royal commissions, objectives and era unlocks
 └── main.ts        # Initialization and lifecycle
 tests/             # Deterministic simulation and state validation tests
 ```
 
-`Game` owns authoritative state. Commands validate placement and affordability before reserving materials and creating a construction project. Crew assignment enforces the shared workforce budget. `Construction` advances builder work at the current hunger productivity, activates completed buildings, repairs damage, and records construction investment. `Survival` applies drought and flood exposure on daily boundaries, then consumes food after delivery arrivals and reconciles population and crews. Consequences use simulation ticks, so speed changes and pause do not change the rules. `GameLoop` advances the simulation in 500 ms fixed steps and renders independently with interpolation. Simulation modules have no dependency on PixiJS or the DOM.
+`Game` owns authoritative state. Commands validate placement and affordability before reserving materials and creating a construction project. Crew assignment enforces the shared workforce budget. `Construction` advances builder work at the current hunger productivity, activates completed buildings, repairs damage, and records construction investment. `Survival` applies drought and flood exposure on daily boundaries, then consumes food after delivery arrivals and reconciles population and crews. Consequences use simulation ticks, so speed changes and pause do not change the rules. `Progression` evaluates the active commission after construction, deliveries, and daily survival, grants rewards once, and records merit milestones. Production and support services share one canonical whole-building staffing order. `GameLoop` advances the simulation in 500 ms fixed steps and renders independently with interpolation. Simulation modules have no dependency on PixiJS or the DOM.
 
 Each building retains a terrain snapshot and its actual completed investment. Floodgates and bridges can retain a completed canal as an underlay; removal restores that original structure and ID. Project costs remain separate from completed investment so cancellation and demolition refunds cannot double count materials. Demolition restores terrain without deleting water, removes source delivery jobs, and reconciles builder assignments after population changes.
 
@@ -78,14 +92,14 @@ The 32 × 32 deterministic starting world uses one procedural canvas texture atl
 
 ## Saves
 
-Every 30 seconds, the complete versioned state is written to IndexedDB with a LocalStorage backup. Leaving or hiding the page also writes a synchronous backup. Startup restores the newest valid copy. Version 3 saves include hunger, meal coverage, shortage and recovery days, departures, building condition, and crop stress alongside construction progress, crew assignments, investment, terrain snapshots, and canal underlays. Version 1 and 2 saves and JSON exports migrate automatically with healthy buildings and no starting hunger; existing structures remain complete, and existing roads, canals, and the starting bridge become editable without resetting the city.
+Every 30 seconds, the complete versioned state is written to IndexedDB with a LocalStorage backup. Leaving or hiding the page also writes a synchronous backup. Startup restores the newest valid copy. Version 4 saves add the highest merit reached, completed commission IDs, delivered cargo totals, and the active daily streak to the complete city and survival state. Version 1, 2, and 3 saves and JSON exports migrate automatically. An already awarded first commission remains complete without paying its reward again; unavailable historic delivery totals begin at zero. Version 3 survival damage, hunger, and ongoing repairs are preserved. Older versions receive healthy buildings and no starting hunger; existing infrastructure becomes editable without resetting the economy.
 
-Save validation checks schemas, grid dimensions, numeric bounds, resources, building and underlay IDs, footprints and terrain snapshots, fractional project progress and crew budgets, survival counters, condition, crop data, couriers, and chronicle records. If IndexedDB is unavailable, LocalStorage can still save the game.
+Save validation checks schemas, grid dimensions, numeric bounds, resources, building and underlay IDs, footprints and terrain snapshots, fractional project progress and crew budgets, survival counters, condition, crop data, couriers, chronicle records, ordered campaign claims, delivery totals, merit milestones, and daily streak bounds. If IndexedDB is unavailable, LocalStorage can still save the game.
 
 Settings supports downloading and importing JSON saves, an evening interface, and starting a fresh settlement. Importing and resetting reloads the application after a successful save. Saves are local to this browser and origin; clearing site data removes them. There is no cloud sync in this initial codebase.
 
 ## Scope and next steps
 
-This prototype includes the resource loop, drought-driven crop failures and recovery, flood damage and timed repairs, food shortages and population consequences, timed construction and temple upgrades, shared builder assignment, demolition and refunds, buildable roads and bridges, hydraulic simulation, routing, rendering, and local persistence. Builder labor is pooled; the crews drawn at sites do not yet travel there as individual agents. Detailed foundation stability, erosion and silt, a bas-relief minigame, audio, campaign maps, cloud saves, and a PWA are future work. Era unlocks are shown as merit milestones; they do not yet introduce new content. Historical themes guide the visual language, while map dimensions, units, dates, resource rates, and progression are game balance abstractions.
+This prototype includes a five-chapter royal campaign, permanent merit unlocks, working granary and workshop benefits, the resource loop, drought-driven crop failures and recovery, flood damage and timed repairs, food shortages and population consequences, timed construction and temple upgrades, shared builder assignment, demolition and refunds, buildable roads and bridges, hydraulic simulation, routing, rendering, and local persistence. Builder labor is pooled; the crews drawn at sites do not yet travel there as individual agents. Detailed foundation stability, erosion and silt, a bas-relief minigame, audio, campaign maps, cloud saves, and a PWA are future work. Historical themes guide the visual language, while map dimensions, units, dates, resource rates, and progression are game balance abstractions.
 
 The project’s design reference is in `docs/Angkor_Architect_Game_Design_Document.pdf`.

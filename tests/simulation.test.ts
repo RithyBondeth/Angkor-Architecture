@@ -121,7 +121,7 @@ describe('construction and resource loop', () => {
     expect(game.state.resources.merit).toBe(before);
     for (let i = 0; i < 40; i++) game.step();
     expect(game.state.resources.merit).toBe(before + 50);
-    expect(game.state.objectivesClaimed).toBe(true);
+    expect(game.state.progression.claimed).toEqual(['water-foundation']);
   });
   it('returns a disconnected shipment to its original producer', () => {
     const s = flatWorld();

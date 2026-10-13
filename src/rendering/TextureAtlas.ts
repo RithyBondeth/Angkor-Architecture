@@ -316,6 +316,8 @@ export class TextureAtlas {
       'gate',
       'road',
       'bridge',
+      'granary',
+      'workshop',
     ] as BuildingKind[])
       this.add(kind, 384, 320, (c) => this.building(c, kind));
     this.add('temple-foundation', 384, 320, (c) => this.building(c, 'temple', 1));
@@ -733,6 +735,58 @@ export class TextureAtlas {
         ellipse(c, 40, 28, 6, 4, '#b9a475');
         ellipse(c, 41, 25, 5, 4, '#d3c18d');
       }
+    } else if (kind === 'granary') {
+      box(c, 0, 8, 65, 32, 6, '#c4b887', '#a19b71', '#8d906b');
+      dwelling(c, 0, -5, 1.25, '#a98a4f');
+      for (let i = 0; i < 6; i++) {
+        const x = -45 + (i % 3) * 12,
+          y = 22 - Math.floor(i / 3) * 9;
+        ellipse(c, x, y, 6, 4, '#c4ac73');
+        ellipse(c, x, y - 5, 5, 7, '#dfcb92');
+        line(
+          c,
+          [
+            [x - 3, y - 10],
+            [x + 3, y - 10],
+          ],
+          '#a58e5c',
+          2,
+        );
+      }
+      box(c, 42, 15, 12, 6, 15, '#e0d1a6', '#b8ab80', '#a0946e');
+    } else if (kind === 'workshop') {
+      box(c, 0, 8, 66, 33, 5, '#c4c1a0', '#a4aa86', '#8d9877');
+      dwelling(c, -17, -10, 0.98, '#728168');
+      box(c, 26, 12, 25, 12, 12, '#dcd4b4', '#b7ad8d', '#9e967a');
+      for (let i = 0; i < 3; i++) box(c, 15 + i * 13, -4 + i * 6, 7, 3.5, 9);
+      line(
+        c,
+        [
+          [15, 7],
+          [42, 20],
+        ],
+        '#806c47',
+        3,
+      );
+      line(
+        c,
+        [
+          [28, 3],
+          [15, 18],
+        ],
+        '#b5955e',
+        3,
+      );
+      for (let i = 0; i < 4; i++)
+        line(
+          c,
+          [
+            [-46 + i * 6, 22],
+            [-24 + i * 6, 33],
+          ],
+          '#a08458',
+          4,
+        );
     } else if (kind === 'quarry') {
       box(c, 0, 4, 65, 32, 5, '#a8aa8e', '#8f957b', '#7d866e');
       for (let i = 0; i < 5; i++)

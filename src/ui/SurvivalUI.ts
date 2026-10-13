@@ -13,6 +13,9 @@ export function foodDays(state: GameState): number {
   const demand = foodDemand(state);
   return demand ? Math.floor(state.resources.rice / demand) : 0;
 }
+export function foodNeed(state: GameState): string {
+  return foodDemand(state).toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
 export function survivalSummary(state: GameState): string {
   const failed = state.buildings.filter((b) => b.crop?.failed).length;
   const damaged = state.buildings.filter((b) => b.condition < 100).length;
@@ -39,7 +42,12 @@ export function survivalSummary(state: GameState): string {
 export function buildingStatus(b: Building): string {
   if (b.condition === 0) return 'Ruined · repairs needed';
   if (b.crop?.failed) return 'Crop failed · restore irrigation';
-  if (!b.enabled) return b.kind === 'gate' ? 'Gate closed' : 'Production paused';
+  if (!b.enabled)
+    return b.kind === 'gate'
+      ? 'Gate closed'
+      : ['granary', 'workshop'].includes(b.kind)
+        ? 'Service paused'
+        : 'Production paused';
   if (b.condition < 100) return 'Flood damage · reduced condition';
   return b.kind === 'gate' ? 'Gate open' : 'Operational';
 }
@@ -63,5 +71,5 @@ export function survivalPanel(state: GameState): string {
   );
   const row = (b: Building, text: string) =>
     `<button class="survival-site" data-action="select-building" data-id="${b.id}"><span>${icon(BUILDINGS[b.kind].icon)}<strong>${BUILDINGS[b.kind].name}</strong><small>${text}</small></span>${icon('arrow-up-right')}</button>`;
-  return `<div class="panel-eyebrow">Food & resilience ${icon('bowl-food')}</div><h2>A city that endures.</h2><p class="panel-subtitle">Nourish your people. Protect their homes.</p>${survivalSummary(state)}<div class="detail-row"><span>Rice needed / day</span><strong>${foodDemand(state)}</strong></div><div class="detail-row"><span>Last meal coverage</span><strong>${Math.round(s.lastFoodCoverage * 100)}%</strong></div><div class="detail-row"><span>Hunger</span><strong>${Math.round(s.hunger)} / 100</strong></div><div class="detail-row"><span>Worker productivity</span><strong>${Math.round(productivity(state) * 100)}%</strong></div><div class="detail-row"><span>Consecutive shortage days</span><strong>${s.shortageDays}</strong></div><div class="detail-row"><span>Residents departed</span><strong>${s.departed}</strong></div><div class="detail-row"><span>Habitable capacity</span><strong>${housingCapacity(state)}</strong></div><p class="building-description">Missed meals slow production, deliveries, and construction. After three shortage days, severe hunger drives residents away. Regular meals restore productivity; five days of reserves and spare housing allow gradual resettlement.</p><h3 class="resilience-heading">Fields at risk <span>${fields.length}</span></h3>${fields.map((b) => row(b, b.crop!.failed ? 'Crop failed · restore irrigation' : `${Math.round(b.crop!.stress)}% drought stress`)).join('') || '<p class="resilience-note">No fields under drought stress.</p>'}<h3 class="resilience-heading">Flood damage <span>${damaged.length}</span></h3>${damaged.map((b) => row(b, `${Math.round(b.condition)}% condition${b.construction?.type === 'repair' ? ' · repairs underway' : ' · inspect to repair'}`)).join('') || '<p class="resilience-note">No damaged structures.</p>'}<p class="resilience-note">Canals and barays hold water safely. Deep flooding above 6 units threatens bridges, gates, and docks; ordinary buildings are vulnerable above 0.8, and paddies above 1.2.</p>`;
+  return `<div class="panel-eyebrow">Food & resilience ${icon('bowl-food')}</div><h2>A city that endures.</h2><p class="panel-subtitle">Nourish your people. Protect their homes.</p>${survivalSummary(state)}<div class="detail-row"><span>Rice needed / day</span><strong>${foodNeed(state)}</strong></div><div class="detail-row"><span>Last meal coverage</span><strong>${Math.round(s.lastFoodCoverage * 100)}%</strong></div><div class="detail-row"><span>Hunger</span><strong>${Math.round(s.hunger)} / 100</strong></div><div class="detail-row"><span>Worker productivity</span><strong>${Math.round(productivity(state) * 100)}%</strong></div><div class="detail-row"><span>Consecutive shortage days</span><strong>${s.shortageDays}</strong></div><div class="detail-row"><span>Residents departed</span><strong>${s.departed}</strong></div><div class="detail-row"><span>Habitable capacity</span><strong>${housingCapacity(state)}</strong></div><p class="building-description">Missed meals slow production, deliveries, and construction. After three shortage days, severe hunger drives residents away. Regular meals restore productivity; five days of reserves and spare housing allow gradual resettlement.</p><h3 class="resilience-heading">Fields at risk <span>${fields.length}</span></h3>${fields.map((b) => row(b, b.crop!.failed ? 'Crop failed · restore irrigation' : `${Math.round(b.crop!.stress)}% drought stress`)).join('') || '<p class="resilience-note">No fields under drought stress.</p>'}<h3 class="resilience-heading">Flood damage <span>${damaged.length}</span></h3>${damaged.map((b) => row(b, `${Math.round(b.condition)}% condition${b.construction?.type === 'repair' ? ' · repairs underway' : ' · inspect to repair'}`)).join('') || '<p class="resilience-note">No damaged structures.</p>'}<p class="resilience-note">Canals and barays hold water safely. Deep flooding above 6 units threatens bridges, gates, and docks; ordinary buildings are vulnerable above 0.8, and paddies above 1.2.</p>`;
 }

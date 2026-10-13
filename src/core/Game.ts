@@ -9,6 +9,8 @@ import { buildingAt, footprint, tileAt } from './world';
 import { captureTerrain } from './buildingState';
 import { Survival } from '../simulation/Survival';
 import { floodUnsafe, housingCapacity, repairCost } from '../simulation/survivalRules';
+import { Progression } from '../simulation/Progression';
+import { buildingUnlocked, earnedMerit, templeUpgradeMerit } from './progressionState';
 import type {
   Building,
   BuildingKind,
@@ -25,6 +27,7 @@ export class Game {
   private readonly logistics = new Logistics();
   private readonly construction = new Construction();
   private readonly survival = new Survival();
+  private readonly progression = new Progression();
   private readonly listeners = new Set<() => void>();
   constructor(public state: GameState) {}
   subscribe(listener: () => void) {
@@ -58,18 +61,7 @@ export class Game {
         season.wet ? 'cloud-rain' : 'sun',
       );
     }
-    if (
-      !this.state.objectivesClaimed &&
-      ['canal', 'paddy', 'baray'].every((k) => (this.state.built[k as BuildingKind] ?? 0) > 0)
-    ) {
-      this.state.objectivesClaimed = true;
-      this.state.resources.merit = Math.min(CONFIG.maxResource, this.state.resources.merit + 50);
-      this.log(
-        'A city sustained by water',
-        'Your first royal commission is complete. The sovereign grants you 50 merit.',
-        'seal-check',
-      );
-    }
+    for (const e of this.progression.step(this.state)) this.log(e.title, e.text, e.icon);
     this.notify();
   }
   setSpeed(speed: 0 | 1 | 2 | 4) {
@@ -77,6 +69,11 @@ export class Game {
     this.notify();
   }
   canPlace(kind: BuildingKind, p: Point): PlacementResult {
+    if (!buildingUnlocked(this.state, kind))
+      return {
+        ok: false,
+        message: `${BUILDINGS[kind].name} unlocks at ${BUILDINGS[kind].unlockMerit} merit. Earn merit through temples and royal commissions.`,
+      };
     if (!Number.isInteger(p.x) || !Number.isInteger(p.y))
       return { ok: false, message: 'Choose a whole tile inside the kingdom.' };
     const def = BUILDINGS[kind];
@@ -252,6 +249,11 @@ export class Game {
       return { ok: false, message: 'Finish the current project before starting another stage.' };
     if (b.condition < 100)
       return { ok: false, message: 'Repair flood damage before upgrading the sanctuary.' };
+    if (earnedMerit(this.state) < templeUpgradeMerit(b.level))
+      return {
+        ok: false,
+        message: `The sculpted sanctuary unlocks at ${templeUpgradeMerit(b.level)} merit.`,
+      };
     const cost = { sandstone: b.level * 80, laterite: 30 };
     if (this.state.resources.sandstone < cost.sandstone || this.state.resources.laterite < 30)
       return {

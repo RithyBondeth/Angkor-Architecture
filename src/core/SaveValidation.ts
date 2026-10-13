@@ -4,6 +4,8 @@ import { completedBuilding, initialInvestment, registerInfrastructure } from './
 import { footprint } from './world';
 import { workforce } from '../simulation/Workforce';
 import { freshSurvival } from './survivalState';
+import { freshProgression } from './progressionState';
+import { COMMISSIONS } from '../data/progression';
 import type { Building, GameState } from './types';
 
 const resources = ['rice', 'wood', 'sandstone', 'laterite', 'merit'];
@@ -16,7 +18,7 @@ const record = (n: unknown): n is Record<string, unknown> =>
   typeof n === 'object' && n !== null && !Array.isArray(n);
 
 /** Validate untrusted local JSON before it can reach the simulation or DOM. */
-function validateShape(value: unknown, version: 1 | 2 | 3 = 3): boolean {
+function validateShape(value: unknown, version: 1 | 2 | 3 | 4 = 4): boolean {
   if (!record(value)) return false;
   const s = value as unknown as GameState;
   if (
@@ -33,7 +35,7 @@ function validateShape(value: unknown, version: 1 | 2 | 3 = 3): boolean {
   )
     return false;
   if (
-    version === 3 &&
+    version >= 3 &&
     (!record(s.survival) ||
       !finite(s.survival.hunger, 0, 100) ||
       !integer(s.survival.shortageDays) ||
@@ -91,7 +93,7 @@ function validateShape(value: unknown, version: 1 | 2 | 3 = 3): boolean {
         occupied.add(key);
       }
   }
-  if (version === 3 && workforce(s).assigned > workforce(s).total) return false;
+  if (version >= 3 && workforce(s).assigned > workforce(s).total) return false;
   if (!Array.isArray(s.couriers) || s.couriers.length > 36) return false;
   for (const c of s.couriers) {
     if (
@@ -144,8 +146,26 @@ function validateShape(value: unknown, version: 1 | 2 | 3 = 3): boolean {
   return (
     record(s.built) &&
     Object.entries(s.built).every(([k, n]) => Object.hasOwn(BUILDINGS, k) && integer(n, 0, 4096)) &&
-    typeof s.objectivesClaimed === 'boolean'
+    (version === 4 ? validProgression(s) : typeof value.objectivesClaimed === 'boolean')
   );
+}
+
+function validProgression(s: GameState): boolean {
+  const p = s.progression;
+  if (
+    !record(p) ||
+    !finite(p.meritPeak, 0, CONFIG.maxResource) ||
+    !Array.isArray(p.claimed) ||
+    p.claimed.length > COMMISSIONS.length ||
+    !p.claimed.every((id, index) => id === COMMISSIONS[index]!.id) ||
+    !record(p.delivered) ||
+    !Object.entries(p.delivered).every(([r, n]) => resources.includes(r) && finite(n)) ||
+    !integer(p.lastDayTick, 0, s.tick) ||
+    !integer(p.streakDays, 0, 7)
+  )
+    return false;
+  const goal = COMMISSIONS[p.claimed.length]?.goals.find((g) => g.type === 'sustain');
+  return goal ? p.streakDays <= goal.target : p.streakDays === 0;
 }
 
 function validCost(value: unknown): boolean {
@@ -158,9 +178,9 @@ function validateBuildingMeta(
   b: Building,
   s: GameState,
   ids: Set<string>,
-  version: 2 | 3,
+  version: 2 | 3 | 4,
 ): boolean {
-  if (version === 3) {
+  if (version >= 3) {
     if (!finite(b.condition, 0, 100)) return false;
     if (b.kind === 'paddy') {
       if (!record(b.crop) || !finite(b.crop.stress, 0, 100) || typeof b.crop.failed !== 'boolean')
@@ -192,7 +212,7 @@ function validateBuildingMeta(
     const p = b.construction;
     if (
       !record(p) ||
-      !(version === 3 ? ['build', 'upgrade', 'repair'] : ['build', 'upgrade']).includes(p.type) ||
+      !(version >= 3 ? ['build', 'upgrade', 'repair'] : ['build', 'upgrade']).includes(p.type) ||
       !integer(p.workRequired, 1, 10000) ||
       !finite(p.workDone, 0, p.workRequired) ||
       p.workDone >= p.workRequired ||
@@ -237,13 +257,17 @@ export function readGameState(value: unknown): GameState | null {
   if (validateState(value)) return structuredClone(value);
   if (
     !record(value) ||
-    (value.version !== 1 && value.version !== 2) ||
+    (value.version !== 1 && value.version !== 2 && value.version !== 3) ||
     !validateShape(value, value.version)
   )
     return null;
   const state = structuredClone(value) as unknown as GameState;
   const legacy = value.version === 1;
-  state.version = 3;
+  state.version = 4;
+  state.progression = freshProgression(state.resources.merit, state.tick);
+  if (value.objectivesClaimed === true) state.progression.claimed.push('water-foundation');
+  delete (state as unknown as Record<string, unknown>).objectivesClaimed;
+  if (value.version === 3) return validateState(state) ? state : null;
   state.survival = freshSurvival();
   for (const b of state.buildings) {
     b.condition = 100;

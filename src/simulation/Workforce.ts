@@ -31,3 +31,17 @@ export function reconcileBuilders(state: GameState) {
       available -= p.builders;
     }
 }
+
+/** Use the same whole-building staffing order for production and unlocked support services. */
+export function staffedBuildings(state: GameState): Set<string> {
+  const labor = workforce(state);
+  let available = Math.max(0, labor.total - labor.builders);
+  const staffed = new Set<string>();
+  for (const b of state.buildings) {
+    const workers = BUILDINGS[b.kind].workers;
+    if (!b.enabled || b.construction || b.condition === 0 || workers > available) continue;
+    available -= workers;
+    staffed.add(b.id);
+  }
+  return staffed;
+}

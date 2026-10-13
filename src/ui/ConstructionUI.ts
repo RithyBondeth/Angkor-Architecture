@@ -2,7 +2,7 @@ import { BUILDINGS, RESOURCE_INFO } from '../data/buildings';
 import { CONFIG } from '../data/config';
 import type { Building, GameState, Resource, Resources } from '../core/types';
 import { workforce } from '../simulation/Workforce';
-import { floodUnsafe, productivity } from '../simulation/survivalRules';
+import { floodUnsafe, builderEfficiency } from '../simulation/survivalRules';
 import { icon } from './icons';
 
 export function progress(b: Building) {
@@ -24,7 +24,8 @@ export function constructionDetails(b: Building, state: GameState, thumbnail: st
     percent = progress(b);
   const seconds = p.builders
     ? Math.ceil(
-        (((p.workRequired - p.workDone) / (p.builders * productivity(state))) * CONFIG.tickMs) /
+        (((p.workRequired - p.workDone) / (p.builders * builderEfficiency(state))) *
+          CONFIG.tickMs) /
           1000,
       )
     : 0;

@@ -2,6 +2,7 @@ import { CONFIG } from '../data/config';
 import { BUILDINGS } from '../data/buildings';
 import { completedBuilding, registerInfrastructure } from './buildingState';
 import { freshSurvival } from './survivalState';
+import { freshProgression } from './progressionState';
 import type { Building, BuildingKind, GameState, Point, Tile } from './types';
 
 export function tileAt(
@@ -47,7 +48,7 @@ export function createWorld(seed = 802): GameState {
   const rand = random(seed);
   const size = CONFIG.worldSize;
   const state: GameState = {
-    version: 3,
+    version: 4,
     seed,
     width: size,
     height: size,
@@ -63,7 +64,7 @@ export function createWorld(seed = 802): GameState {
     speed: 1,
     nextId: 1,
     built: {},
-    objectivesClaimed: false,
+    progression: freshProgression(48),
     chronicle: [
       {
         tick: 0,
