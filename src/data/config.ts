@@ -11,6 +11,17 @@ export const CONFIG = {
   maxCouriers: 36,
   maxBuildersPerProject: 8,
   demolitionRefund: 0.5,
+  survival: {
+    residentsPerRice: 18,
+    hungerPerMissedMeal: 14,
+    hungerRecovery: 10,
+    departureHunger: 40,
+    shortageGraceDays: 3,
+    droughtIrrigation: 0.25,
+    cropFailureStress: 70,
+    cropRecoveryStress: 20,
+    baseHousing: 60,
+  },
 } as const;
 
 /** Inspired by Khmer hydraulic cities; gameplay rates are illustrative, not historical measurements. */

@@ -7,6 +7,8 @@ import { reconcileBuilders, workforce } from '../simulation/Workforce';
 import { SeasonManager } from './SeasonManager';
 import { buildingAt, footprint, tileAt } from './world';
 import { captureTerrain } from './buildingState';
+import { Survival } from '../simulation/Survival';
+import { floodUnsafe, housingCapacity, repairCost } from '../simulation/survivalRules';
 import type {
   Building,
   BuildingKind,
@@ -22,6 +24,7 @@ export class Game {
   private readonly water = new WaterSimulation();
   private readonly logistics = new Logistics();
   private readonly construction = new Construction();
+  private readonly survival = new Survival();
   private readonly listeners = new Set<() => void>();
   constructor(public state: GameState) {}
   subscribe(listener: () => void) {
@@ -35,14 +38,16 @@ export class Game {
     const oldSeason = SeasonManager.at(this.state.day).wet;
     this.state.tick++;
     if (this.state.tick % CONFIG.ticksPerDay === 0) this.state.day++;
+    this.water.step(this.state);
+    for (const e of this.survival.environment(this.state)) this.log(e.title, e.text, e.icon);
     for (const b of this.construction.step(this.state))
       this.log(
         `${BUILDINGS[b.kind].name} completed`,
         `${BUILDINGS[b.kind].name} is ready to serve your city.`,
         'hammer',
       );
-    this.water.step(this.state);
     this.logistics.step(this.state);
+    for (const e of this.survival.food(this.state)) this.log(e.title, e.text, e.icon);
     if (oldSeason !== SeasonManager.at(this.state.day).wet) {
       const season = SeasonManager.at(this.state.day);
       this.log(
@@ -159,6 +164,8 @@ export class Game {
       level: 1,
       enabled: true,
       stock: 0,
+      condition: 100,
+      crop: kind === 'paddy' ? { stress: 0, failed: false } : null,
       construction: this.project('build', def.cost, def.buildWork, def.builders),
       investment: {},
       terrainBefore: captureTerrain(this.state, kind, p.x, p.y),
@@ -243,6 +250,8 @@ export class Game {
       return { ok: false, message: 'This monument is already complete.' };
     if (b.construction)
       return { ok: false, message: 'Finish the current project before starting another stage.' };
+    if (b.condition < 100)
+      return { ok: false, message: 'Repair flood damage before upgrading the sanctuary.' };
     const cost = { sandstone: b.level * 80, laterite: 30 };
     if (this.state.resources.sandstone < cost.sandstone || this.state.resources.laterite < 30)
       return {
@@ -282,7 +291,7 @@ export class Game {
         refund[r] = (refund[r] ?? 0) + Math.floor(n * rate);
       }
     };
-    if (!cancelOnly) add(b.investment, CONFIG.demolitionRefund);
+    if (!cancelOnly) add(b.investment, (CONFIG.demolitionRefund * b.condition) / 100);
     if (b.construction)
       add(
         b.construction.cost,
@@ -316,16 +325,53 @@ export class Game {
           'This project has already finished. Inspect it to demolish the completed building.',
       };
     if (b.construction.type === 'build') return this.demolish(id);
+    const repair = b.construction.type === 'repair';
     this.credit(this.refundFor(id, true));
     b.construction = null;
     reconcileBuilders(this.state);
     this.log(
-      'Temple upgrade canceled',
-      'The existing sanctuary remains. Unused construction materials were recovered.',
+      repair ? 'Repairs canceled' : 'Temple upgrade canceled',
+      repair
+        ? 'The structure retains its current damage. Unused repair materials were recovered.'
+        : 'The existing sanctuary remains. Unused construction materials were recovered.',
       'hammer',
     );
     this.notify();
-    return { ok: true, message: 'Upgrade canceled. The existing sanctuary is operational.' };
+    return {
+      ok: true,
+      message: repair
+        ? 'Repairs canceled. Remaining damage still affects the structure.'
+        : 'Upgrade canceled. The existing sanctuary is operational.',
+    };
+  }
+  repair(id: string): PlacementResult {
+    const b = this.state.buildings.find((b) => b.id === id);
+    if (!b || b.condition === 100) return { ok: false, message: 'Choose a damaged structure.' };
+    if (b.construction)
+      return { ok: false, message: 'Finish or cancel the current project first.' };
+    if (floodUnsafe(this.state, b))
+      return { ok: false, message: 'Wait for floodwater to recede before starting repairs.' };
+    const cost = repairCost(b);
+    for (const [r, n] of Object.entries(cost))
+      if (this.state.resources[r as Resource] < n)
+        return { ok: false, message: `Repairs need more ${r}.` };
+    this.pay(cost);
+    b.construction = {
+      type: 'repair',
+      cost,
+      workDone: 0,
+      workRequired: Math.max(8, Math.ceil((100 - b.condition) * 2)),
+      builders: 0,
+      paused: false,
+    };
+    b.construction.builders = Math.min(BUILDINGS[b.kind].builders, workforce(this.state).available);
+    this.log(
+      'Repairs begin',
+      `Builders are restoring ${BUILDINGS[b.kind].name.toLowerCase()}.`,
+      'hammer',
+    );
+    this.notify();
+    return { ok: true, message: 'Repair project started. Assign builders to restore condition.' };
   }
   demolish(id: string): PlacementResult {
     const b = this.state.buildings.find((b) => b.id === id);
@@ -344,7 +390,12 @@ export class Game {
     }
     if (b.underlay) this.state.buildings.push(b.underlay);
     if (b.kind === 'house' && !pendingBuild)
-      this.state.population = Math.max(0, this.state.population - 8);
+      this.state.population -= Math.min(
+        8,
+        b.condition > 0
+          ? this.state.population
+          : Math.max(0, this.state.population - housingCapacity(this.state)),
+      );
     reconcileBuilders(this.state);
     this.log(
       pendingBuild ? 'Construction canceled' : `${BUILDINGS[b.kind].name} removed`,

@@ -338,7 +338,7 @@ describe('construction save migration and validation', () => {
   it('migrates version 1 saves and registers existing infrastructure without changing the economy', () => {
     const legacy = legacySave(),
       state = readGameState(legacy)!;
-    expect(state.version).toBe(2);
+    expect(state.version).toBe(3);
     expect(state.resources.wood).toBe(1234);
     expect(state.day).toBe(47);
     expect(state.population).toBe(84);
@@ -354,7 +354,7 @@ describe('construction save migration and validation', () => {
       getItem: () => JSON.stringify({ schema: 1, savedAt: Date.now(), state: legacy }),
     });
     const restored = await new Persistence().load();
-    expect(restored?.version).toBe(2);
+    expect(restored?.version).toBe(3);
     expect(restored?.resources.wood).toBe(1234);
   });
   it('round trips active progress, crew assignments, underlays, and paused projects', () => {

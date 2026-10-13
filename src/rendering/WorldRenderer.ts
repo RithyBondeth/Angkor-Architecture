@@ -4,6 +4,7 @@ import { buildingAt, footprint, tileAt } from '../core/world';
 import type { BuildingKind, Overlay, Point } from '../core/types';
 import { movementRate } from '../simulation/Pathfinding';
 import { constructionSite } from './ConstructionSite';
+import { floodUnsafe } from '../simulation/survivalRules';
 import type { Game } from '../core/Game';
 import { Camera } from './Camera';
 import { TextureAtlas } from './TextureAtlas';
@@ -24,6 +25,7 @@ export class WorldRenderer {
   private readonly courierSprites = new Map<string, Sprite>();
   private readonly treeSprites = new Map<number, Sprite>();
   private readonly sites = new Map<string, ReturnType<typeof constructionSite>>();
+  private readonly riskLabels = new Map<string, Text>();
   private demolition = false;
   private readonly labels = new Container();
   private selected: string | null = null;
@@ -152,6 +154,16 @@ export class WorldRenderer {
         site.view.destroy({ children: true });
         this.sites.delete(id);
       }
+    for (const [id, label] of this.riskLabels)
+      if (
+        !state.buildings.some(
+          (b) =>
+            b.id === id && !b.construction && (b.condition < 100 || (b.crop?.stress ?? 0) >= 30),
+        )
+      ) {
+        label.destroy();
+        this.riskLabels.delete(id);
+      }
     for (const b of state.buildings) {
       const size = BUILDINGS[b.kind].size;
       const center = toScreen(b.x + (size - 1) / 2, b.y + (size - 1) / 2);
@@ -167,12 +179,44 @@ export class WorldRenderer {
         const p = b.construction;
         site.label.text = p.paused
           ? 'Paused'
-          : !p.builders
-            ? 'Queued'
-            : `${Math.floor((p.workDone / p.workRequired) * 100)}%`;
+          : p.type === 'repair' && floodUnsafe(state, b)
+            ? 'Flooded'
+            : !p.builders
+              ? 'Queued'
+              : `${Math.floor((p.workDone / p.workRequired) * 100)}%`;
         site.label.style.fontSize = 9;
         site.workers.forEach((worker, i) => (worker.visible = !p.paused && i < p.builders));
       }
+      if (!b.construction && (b.condition < 100 || (b.crop?.stress ?? 0) >= 30)) {
+        let label = this.riskLabels.get(b.id);
+        if (!label) {
+          label = new Text({
+            text: '',
+            style: {
+              fontFamily: 'DM Sans',
+              fontSize: 10,
+              fontWeight: '600',
+              fill: 0xfff2df,
+              stroke: { color: 0x584a35, width: 4 },
+            },
+          });
+          label.anchor.set(0.5);
+          label.position.set(center.x, center.y + size * 18 + 12);
+          label.zIndex = center.y + size * 8 + 2;
+          this.objects.addChild(label);
+          this.riskLabels.set(b.id, label);
+        }
+        label.text =
+          b.condition === 0
+            ? 'Ruined'
+            : b.crop?.failed
+              ? 'Crop failed'
+              : b.condition < 100
+                ? `${Math.round(b.condition)}% condition`
+                : 'Drought stress';
+      }
+      if (b.kind === 'road' && b.condition < 100)
+        this.tileSprites[b.y * state.width + b.x]!.tint = 0xb19b81;
       if (b.kind === 'canal' || b.kind === 'road') continue;
       const artwork = b.kind === 'temple' && b.level === 1 ? 'temple-foundation' : b.kind;
       let sprite = this.buildingSprites.get(b.id);
@@ -199,7 +243,14 @@ export class WorldRenderer {
             : b.enabled
               ? 1
               : 0.55;
-      sprite.tint = this.selected === b.id ? 0xfff2cf : 0xffffff;
+      sprite.tint =
+        this.selected === b.id
+          ? 0xfff2cf
+          : b.crop?.failed
+            ? 0xb9a075
+            : b.condition < 100
+              ? 0xc8a080
+              : 0xffffff;
     }
     this.labels.children[0]!.visible = state.buildings.some(
       (b) => b.kind === 'baray' && b.x === 7 && b.y === 8,

@@ -16,6 +16,8 @@
   --pale-green: #e9eee2;
   --map: #dce4c9;
   --shadow: 0 5px 24px #3f593a0d;
+  --warning-border: #b18c4b;
+  --warning-surface: #f4eddd;
   color-scheme: light;
 }
 * {
@@ -1663,6 +1665,8 @@ dialog > p {
   border: 1px solid #a67d5c;
 }
 [data-theme='dark'] {
+  --warning-border: #a58a56;
+  --warning-surface: #38392d;
   --paper: #283e31;
   --surface: #22362b;
   --ink: #dae0cd;
@@ -2814,4 +2818,99 @@ dialog > p {
     font-size: 7px;
     padding: 0 2px;
   }
+}
+
+.survival-summary {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 10px;
+  width: 100%;
+  padding: 13px;
+  margin: 16px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.resource small.food-warning {
+  color: var(--ink);
+  font-weight: 700;
+}
+.survival-summary > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.survival-summary > small {
+  grid-column: 1;
+  color: var(--muted);
+  font-size: 11px;
+}
+.survival-summary > .ph {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  align-self: center;
+}
+.survival-summary.at-risk {
+  border-color: var(--warning-border);
+  background: var(--warning-surface);
+}
+.resilience-note,
+.repair-cost {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.65;
+  margin: 10px 0;
+}
+.repair-cost {
+  text-align: center;
+}
+.building-resilience {
+  margin: 12px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.resilience-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 22px 0 10px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+}
+.resilience-heading > span {
+  font-weight: 500;
+  color: var(--muted);
+}
+.survival-site {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 8px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--ink);
+  padding: 12px 0;
+  text-align: left;
+  cursor: pointer;
+}
+.survival-site > span {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 5px;
+  font-size: 12px;
+}
+.survival-site small {
+  grid-column: 2;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.survival-site:hover strong {
+  text-decoration: underline;
 }

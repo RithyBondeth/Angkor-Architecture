@@ -32,6 +32,8 @@ export interface Building extends Point {
   level: number;
   enabled: boolean;
   stock: number;
+  condition: number;
+  crop: { stress: number; failed: boolean } | null;
   construction: ConstructionProject | null;
   investment: Partial<Resources>;
   terrainBefore: TerrainSnapshot[];
@@ -43,7 +45,7 @@ export interface TerrainSnapshot extends Point {
   elevation: number;
 }
 export interface ConstructionProject {
-  type: 'build' | 'upgrade';
+  type: 'build' | 'upgrade' | 'repair';
   workDone: number;
   workRequired: number;
   builders: number;
@@ -79,7 +81,7 @@ export interface ChronicleEntry {
   icon: string;
 }
 export interface GameState {
-  version: 2;
+  version: 3;
   seed: number;
   width: number;
   height: number;
@@ -91,6 +93,7 @@ export interface GameState {
   day: number;
   population: number;
   happiness: number;
+  survival: SurvivalState;
   speed: 0 | 1 | 2 | 4;
   nextId: number;
   chronicle: ChronicleEntry[];
@@ -102,7 +105,14 @@ export interface PlacementResult {
   message: string;
 }
 export interface SaveEnvelope {
-  schema: 2;
+  schema: 3;
   savedAt: number;
   state: GameState;
+}
+export interface SurvivalState {
+  hunger: number;
+  shortageDays: number;
+  fedDays: number;
+  lastFoodCoverage: number;
+  departed: number;
 }

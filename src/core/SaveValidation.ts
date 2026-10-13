@@ -3,6 +3,7 @@ import { CONFIG } from '../data/config';
 import { completedBuilding, initialInvestment, registerInfrastructure } from './buildingState';
 import { footprint } from './world';
 import { workforce } from '../simulation/Workforce';
+import { freshSurvival } from './survivalState';
 import type { Building, GameState } from './types';
 
 const resources = ['rice', 'wood', 'sandstone', 'laterite', 'merit'];
@@ -15,11 +16,11 @@ const record = (n: unknown): n is Record<string, unknown> =>
   typeof n === 'object' && n !== null && !Array.isArray(n);
 
 /** Validate untrusted local JSON before it can reach the simulation or DOM. */
-function validateShape(value: unknown, legacy = false): boolean {
+function validateShape(value: unknown, version: 1 | 2 | 3 = 3): boolean {
   if (!record(value)) return false;
   const s = value as unknown as GameState;
   if (
-    s.version !== (legacy ? 1 : 2) ||
+    value.version !== version ||
     !integer(s.width, 8, 64) ||
     !integer(s.height, 8, 64) ||
     !integer(s.seed) ||
@@ -29,6 +30,16 @@ function validateShape(value: unknown, legacy = false): boolean {
     !integer(s.population, 0, 100_000) ||
     !finite(s.happiness, 0, 100) ||
     ![0, 1, 2, 4].includes(s.speed)
+  )
+    return false;
+  if (
+    version === 3 &&
+    (!record(s.survival) ||
+      !finite(s.survival.hunger, 0, 100) ||
+      !integer(s.survival.shortageDays) ||
+      !integer(s.survival.fedDays) ||
+      !finite(s.survival.lastFoodCoverage, 0, 1) ||
+      !integer(s.survival.departed))
   )
     return false;
   if (
@@ -70,7 +81,7 @@ function validateShape(value: unknown, legacy = false): boolean {
       return false;
     if (Number(b.id.slice(1)) >= s.nextId) return false;
     ids.add(b.id);
-    if (!legacy && !validateBuildingMeta(b, s, ids)) return false;
+    if (version !== 1 && !validateBuildingMeta(b, s, ids, version)) return false;
     const size = BUILDINGS[b.kind].size;
     if (b.x + size > s.width || b.y + size > s.height) return false;
     for (let y = b.y; y < b.y + size; y++)
@@ -80,7 +91,7 @@ function validateShape(value: unknown, legacy = false): boolean {
         occupied.add(key);
       }
   }
-  if (!legacy && workforce(s).assigned > workforce(s).total) return false;
+  if (version === 3 && workforce(s).assigned > workforce(s).total) return false;
   if (!Array.isArray(s.couriers) || s.couriers.length > 36) return false;
   for (const c of s.couriers) {
     if (
@@ -143,7 +154,19 @@ function validCost(value: unknown): boolean {
     Object.entries(value).every(([key, n]) => resources.includes(key) && integer(n, 0, 99999))
   );
 }
-function validateBuildingMeta(b: Building, s: GameState, ids: Set<string>): boolean {
+function validateBuildingMeta(
+  b: Building,
+  s: GameState,
+  ids: Set<string>,
+  version: 2 | 3,
+): boolean {
+  if (version === 3) {
+    if (!finite(b.condition, 0, 100)) return false;
+    if (b.kind === 'paddy') {
+      if (!record(b.crop) || !finite(b.crop.stress, 0, 100) || typeof b.crop.failed !== 'boolean')
+        return false;
+    } else if (b.crop !== null) return false;
+  }
   const size = BUILDINGS[b.kind].size;
   if (
     !validCost(b.investment) ||
@@ -169,9 +192,10 @@ function validateBuildingMeta(b: Building, s: GameState, ids: Set<string>): bool
     const p = b.construction;
     if (
       !record(p) ||
-      !['build', 'upgrade'].includes(p.type) ||
+      !(version === 3 ? ['build', 'upgrade', 'repair'] : ['build', 'upgrade']).includes(p.type) ||
       !integer(p.workRequired, 1, 10000) ||
-      !integer(p.workDone, 0, p.workRequired - 1) ||
+      !finite(p.workDone, 0, p.workRequired) ||
+      p.workDone >= p.workRequired ||
       !integer(p.builders, 0, CONFIG.maxBuildersPerProject) ||
       typeof p.paused !== 'boolean' ||
       (p.paused && p.builders !== 0) ||
@@ -200,7 +224,7 @@ function validateBuildingMeta(b: Building, s: GameState, ids: Set<string>): bool
     )
       return false;
     ids.add(u.id);
-    if (!validateBuildingMeta(u, s, ids)) return false;
+    if (!validateBuildingMeta(u, s, ids, version)) return false;
   }
   return true;
 }
@@ -211,10 +235,26 @@ export function validateState(value: unknown): value is GameState {
 /** Upgrade instant-building saves without restarting the player's settlement. */
 export function readGameState(value: unknown): GameState | null {
   if (validateState(value)) return structuredClone(value);
-  if (!record(value) || value.version !== 1 || !validateShape(value, true)) return null;
+  if (
+    !record(value) ||
+    (value.version !== 1 && value.version !== 2) ||
+    !validateShape(value, value.version)
+  )
+    return null;
   const state = structuredClone(value) as unknown as GameState;
-  state.version = 2;
+  const legacy = value.version === 1;
+  state.version = 3;
+  state.survival = freshSurvival();
   for (const b of state.buildings) {
+    b.condition = 100;
+    b.crop = b.kind === 'paddy' ? { stress: 0, failed: false } : null;
+    if (!legacy) {
+      if (b.underlay) {
+        b.underlay.condition = 100;
+        b.underlay.crop = null;
+      }
+      continue;
+    }
     b.construction = null;
     b.investment = initialInvestment(b.kind, b.level);
     b.underlay = null;
@@ -232,6 +272,6 @@ export function readGameState(value: unknown): GameState | null {
       b.underlay = canal;
     }
   }
-  registerInfrastructure(state);
+  if (legacy) registerInfrastructure(state);
   return validateState(state) ? state : null;
 }

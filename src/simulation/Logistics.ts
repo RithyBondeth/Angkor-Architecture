@@ -1,11 +1,11 @@
 import { BUILDINGS } from '../data/buildings';
 import { CONFIG } from '../data/config';
 import type { Building, GameState, Point, Resource } from '../core/types';
-import { tileAt } from '../core/world';
 import { findPath, traversable, movementRate } from './Pathfinding';
 import { workforce } from './Workforce';
 import type { TravelMode } from './Pathfinding';
 import { WaterSimulation } from './WaterSimulation';
+import { floodUnsafe, productivity } from './survivalRules';
 
 function approaches(state: GameState, b: Building, mode: TravelMode): Point[] {
   const size = BUILDINGS[b.kind].size;
@@ -22,7 +22,10 @@ export function deliveryRoute(state: GameState, b: Building): Point[] | null {
   const mode = b.kind === 'quarry' ? 'barge' : 'worker';
   const targets = state.buildings.filter(
     (t) =>
-      t.enabled && !t.construction && (mode === 'barge' ? t.kind === 'dock' : t.kind === 'house'),
+      t.enabled &&
+      !t.construction &&
+      t.condition > 0 &&
+      (mode === 'barge' ? t.kind === 'dock' : t.kind === 'house'),
   );
   const starts = approaches(state, b, mode).slice(0, 6);
   for (const target of targets) {
@@ -55,32 +58,21 @@ export class Logistics {
       return true;
     });
     if (state.tick % 10 !== 0) return;
-    const pool = workforce(state);
-    let labor = pool.total - pool.builders;
+    const outputs = Logistics.outputs(state);
     for (const b of state.buildings) {
       const def = BUILDINGS[b.kind];
-      if (!b.enabled || b.construction || labor < def.workers) continue;
-      labor -= def.workers;
       if (!def.production) continue;
-      let amount = def.production.amount * b.level;
-      if (b.kind === 'paddy') amount *= WaterSimulation.irrigation(state, b.x, b.y);
-      if (b.kind === 'lumber') {
-        const forest = state.tiles.some(
-          (t) => t.terrain === 'forest' && Math.abs(t.x - b.x) + Math.abs(t.y - b.y) < 7,
-        );
-        if (!forest) continue;
-      }
-      const flooded = tileAt(state, b.x, b.y)!.water > 0.8;
-      if (flooded && b.kind !== 'temple') amount *= 0.2;
+      const amount = outputs.get(b.id);
+      if (amount === undefined) continue;
       if (b.kind === 'temple') {
         state.resources.merit = Math.min(CONFIG.maxResource, state.resources.merit + amount);
         continue;
       }
-      b.stock = Math.min(100, b.stock + Math.floor(amount));
+      b.stock = Math.min(100, b.stock + amount);
       if (b.stock < 1 || state.couriers.length >= CONFIG.maxCouriers) continue;
       const path = deliveryRoute(state, b);
       if (!path) continue;
-      const cargo = Math.min(b.stock, 30);
+      const cargo = Math.min(Math.floor(b.stock), 30);
       b.stock -= cargo;
       state.couriers.push({
         id: `c${state.nextId++}`,
@@ -94,26 +86,43 @@ export class Logistics {
       if (b.kind === 'quarry')
         state.resources.laterite = Math.min(CONFIG.maxResource, state.resources.laterite + 2);
     }
-    const consumption = Math.max(1, Math.ceil(state.population / 18));
-    state.resources.rice = Math.max(0, state.resources.rice - consumption);
-    state.happiness = Math.max(
-      20,
-      Math.min(99, state.happiness + (state.resources.rice > 30 ? 0.1 : -2)),
-    );
   }
   static workforce(state: GameState) {
     return workforce(state);
   }
   static rate(state: GameState, resource: Resource): number {
-    return state.buildings
-      .filter(
-        (b) => b.enabled && !b.construction && BUILDINGS[b.kind].production?.resource === resource,
+    const outputs = Logistics.outputs(state);
+    return state.buildings.reduce(
+      (n, b) =>
+        n + (BUILDINGS[b.kind].production?.resource === resource ? (outputs.get(b.id) ?? 0) : 0),
+      0,
+    );
+  }
+  /** The HUD and production share staffing, crop, flood, damage, and hunger modifiers. */
+  static outputs(state: GameState): Map<string, number> {
+    const outputs = new Map<string, number>();
+    const pool = workforce(state);
+    let labor = pool.total - pool.builders;
+    for (const b of state.buildings) {
+      const def = BUILDINGS[b.kind];
+      if (!b.enabled || b.construction || b.condition === 0 || labor < def.workers) continue;
+      labor -= def.workers;
+      if (!def.production) continue;
+      let amount = (def.production.amount * b.level * productivity(state) * b.condition) / 100;
+      if (b.crop)
+        amount *= b.crop.failed
+          ? 0
+          : WaterSimulation.irrigation(state, b.x, b.y, def.size) * (1 - b.crop.stress / 100);
+      if (floodUnsafe(state, b)) amount *= 0.2;
+      if (
+        b.kind === 'lumber' &&
+        !state.tiles.some(
+          (t) => t.terrain === 'forest' && Math.abs(t.x - b.x) + Math.abs(t.y - b.y) < 7,
+        )
       )
-      .reduce((n, b) => {
-        const amount = BUILDINGS[b.kind].production!.amount * b.level;
-        return (
-          n + (b.kind === 'paddy' ? amount * WaterSimulation.irrigation(state, b.x, b.y) : amount)
-        );
-      }, 0);
+        amount = 0;
+      outputs.set(b.id, amount);
+    }
+    return outputs;
   }
 }
