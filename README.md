@@ -14,40 +14,128 @@
 
 ## Overview
 
-Angkor Architect is a planned zero-install, browser-based isometric simulation game: *SimCity* meets ancient Angkor. Players take the role of the **Royal Master Builder (*Kru Vitu*)** during the golden age of the Khmer Empire (9th–15th century).
+Angkor Architect is a browser-based isometric simulation game: _SimCity_ meets ancient Angkor. Players take the role of the **Royal Master Builder (_Kru Vitu_)** during the golden age of the Khmer Empire (9th–15th century).
 
-Unlike traditional city builders, where road networks drive growth, **waterways are the lifeblood**. Players design, excavate, and regulate an ancient hydraulic grid of *barays* (reservoirs), dikes, and canals to survive the monsoon seasons, keep rice fields irrigated, and float sandstone from Mount Kulen to build monumental temples.
+**Waterways are the lifeblood** of the city. Design, excavate, and regulate a hydraulic grid of _barays_ (reservoirs) and canals to survive the monsoon seasons, keep rice fields irrigated, and float sandstone to build monumental temples.
 
-> **Status: pre-production.** This repository currently holds the [Game Design Document](docs/Angkor_Architect_Game_Design_Document.pdf). Implementation has not started yet.
+A playable foundation for a web-based isometric city builder inspired by the hydraulic cities of the Khmer Empire. Built with **strict TypeScript, PixiJS 8, and Vite**. No account, server, or external image service is required.
 
-## Planned Features
+## Tech stack
 
-- **Dynamic hydraulic engine:** wet and dry monsoon cycles, reservoirs and floodgates, and the risk of dike breaches.
-- **Multi-stage construction:** moat excavation → laterite foundations → sandstone superstructures → bas-relief carving mini-games.
-- **Historical regions:** from the Tonlé Sap floodplain to the Kulen foothills and the Angkor core.
-- **Authentic Khmer aesthetics:** isometric visuals, traditional *kbach* motifs, and a soundscape inspired by *pinpeat* music.
+| Area             | Technology                                                 |
+| ---------------- | ---------------------------------------------------------- |
+| Rendering        | PixiJS (WebGL-accelerated isometric 2D)                    |
+| Language         | TypeScript with strict mode                                |
+| Build tool       | Vite                                                       |
+| Water simulation | Cellular automata for elevation and pressure-driven flow   |
+| Pathfinding      | A* for workers and river barges                            |
+| Persistence      | IndexedDB with a LocalStorage backup and JSON save exports |
 
-## Planned Tech Stack
+## Run locally
 
-| Area | Technology |
-| --- | --- |
-| Rendering | PixiJS (WebGL-accelerated isometric 2D) |
-| Language | TypeScript |
-| Water simulation | Cellular automata for water flow and pressure across canal nodes |
-| Pathfinding | A* for workers and river barges |
-| Persistence | IndexedDB with compressed JSON save states |
+Use Node.js 22.12+ (or a newer supported release).
+
+```sh
+npm install
+npm run dev
+```
+
+Open the URL printed by Vite, normally `http://localhost:5173`.
+
+```sh
+npm test           # Simulation, progression, survival, routing, construction, and save validation
+npm run typecheck  # Strict TypeScript checks
+npm run build      # Type check and production bundle
+npm run preview    # Serve the production build
+```
+
+## Play
+
+Select a building from the bottom tray, then click a valid site to plan it. Drag the map to pan; scroll to zoom. Materials are reserved immediately, and builders complete the project over simulation ticks. Click a site to change its crew, pause or resume work, or review a cancellation refund. The Construction view lists all active projects and the available workforce.
+
+Completed buildings can be inspected, paused, upgraded, or removed. The trash tool (`X`) lets you select a structure on the map and review its refund before removal. Demolition confirmation pauses the simulation so its preview stays accurate; closing the dialog restores the previous speed.
+
+- **Water:** Excavate a baray, then connect it to an existing canal or river. Reservoirs collect monsoon rain. Water moves by elevation and surface pressure; during the dry season, evaporation drains the network. Floodgates must occupy an existing canal tile.
+- **Agriculture and drought:** Paddies need water within two tiles of their footprint. Irrigation below 25% adds 12 drought stress per day; 25–50% adds four. At 70% stress, the crop fails and stops producing. Irrigation of at least 50% removes ten stress per day; a failed field replants at 20%. Stress reduces yield before failure. Already harvested rice and dispatched cargo remain available. Workers deliver rice and timber to dwellings over dry land.
+- **Logistics:** Sandstone requires a continuous navigable route between a quarry and a river landing. Watch workers and barges move across the map. Disconnected deliveries return their cargo to production stock.
+- **Roads and bridges:** The Paths & bridges category contains village roads and timber bridges. Workers prefer roads and travel faster on them. A bridge spans one river or completed canal tile; adjoining bridge tiles span wider water. Water and barges continue underneath. Removing a bridge or floodgate restores its original canal, when present.
+- **Flood damage:** Each day, the deepest water on a completed building’s footprint can reduce condition by up to 12 points. Ordinary buildings tolerate 0.8 water depth, paddies 1.2, and bridges, docks, and floodgates six. Canals and reservoirs tolerate stored water. Condition scales production; zero condition stops operations, frees workers, disables crossings and floodgate resistance, and reduces habitable housing. Water and barges still pass below ruined bridges.
+- **Repairs:** After floodwater recedes, inspect a damaged structure to start a timed repair project. Materials cost 40% of the original building cost, scaled by damage and rounded up. Builders and production share labor; production pauses during repairs. Renewed flooding suspends repair work. Completion restores 100% condition, while cancellation refunds unused materials and retains damage. Repair materials are consumed upkeep and do not increase demolition investment.
+- **Food and survival:** Residents eat daily: one rice for every 18 people, rounded up. Partial meals add proportional hunger; missed meals add 14 hunger, while a fully fed day removes ten. Hunger slows production, deliveries, and all builder work, down to 35% productivity. After three consecutive shortage days and at least 40 hunger, 2% of residents (rounded up) leave each day. Regular meals restore productivity. Once hunger is gone, spare housing and five days of rice reserves allow one resident to return every three days after five healthy days. The Food & resilience view shows reserves, hunger, productivity, drought stress, damaged sites, and recovery actions.
+- **Construction:** Projects start with a suggested crew when labor is available. Assign up to eight builders to one project to finish sooner. Pausing releases its crew; a project with zero builders waits for a manual assignment. New sites reserve their footprints but do not produce resources, house residents, excavate canals, or regulate water until complete.
+- **Workforce:** Builders and production share the same pool. Dwellings bring eight residents when construction finishes; 65% of residents form the workforce. Finishing production buildings or removing housing can reduce construction crews to keep assignments within the population limit. Pausing production frees labor for construction.
+- **Demolition and refunds:** Completed structures return 50% of invested materials, scaled by remaining condition and rounded down per resource. Unfinished projects return 100% at zero progress, decreasing linearly to 50% at completion. Stored goods and dispatched cargo are recovered when their producer is removed, subject to the city’s resource storage limits. Canceling a temple upgrade preserves the existing sanctuary. Demolishing an intact dwelling removes up to eight residents. Removing a ruined dwelling only displaces any residents still above the remaining housing capacity, so already displaced residents are not removed twice. Ruined homes gradually displace up to two residents per day; repairing them restores space for resettlement. The starting settlement includes housing for 60 people plus eight per intact dwelling.
+- **Water conservation:** Removing a canal or reservoir restores the terrain elevation while retaining its current water. Reclaiming filled waterways can flood neighboring land; the confirmation preview explains this effect.
+- **Temples:** Sanctuaries generate merit and progress through foundations, towers, and reliefs. Upgrades are timed projects requiring nearby water, sandstone, laterite, and an assigned crew. Merit production pauses during an upgrade.
+- **Royal campaign:** Five linked commissions take the city from hydraulic foundations through connected neighborhoods, dry-season resilience, food supply, and a completed temple city. The overview shows the current commission; Royal commissions shows all chapters and their rewards. Rewards are granted automatically while the simulation runs, once every objective in the active chapter is met. Completed projects count toward building goals; starting structures and canceled sites do not. Population, rice reserves, healthy irrigation, and an operational temple are checked against the current city. Sustained objectives count consecutive daily checks in their own chapter and reset when conditions lapse.
+- **Merit unlocks:** At 200 merit, the Great barays era unlocks the royal granary. A staffed, completed granary reduces daily rice needs by up to 25%. At 600 merit, the Temple city era unlocks the architect’s workshop and final temple stage. A staffed workshop increases builder work by up to 20%, including repairs and temple upgrades. Damage reduces support benefits; paused, ruined, unstaffed, or unfinished support buildings provide no benefit. Multiple copies use the strongest active benefit and do not stack. Earlier temple stages and basic infrastructure remain available from the start. Existing buildings and projects keep working.
+- **Permanent progression:** Era unlocks use the highest merit reached, so they remain available if the current balance falls. Commission rewards can be earned only once. Delivery objectives count actual rice or sandstone received from couriers, up to available storage space; starting resources, refunds, returned shipments, and rewards do not count. After all five chapters, the city continues in free play.
+
+| Controls           | Action                                  |
+| ------------------ | --------------------------------------- |
+| Drag / arrow keys  | Pan the camera                          |
+| Scroll / `+` / `-` | Zoom                                    |
+| `Space`            | Pause or resume                         |
+| `1` to `6`         | Select the first six buildings          |
+| `Escape`           | Cancel placement                        |
+| `X`                | Toggle demolition tool                  |
+| `W` / `L` / `G`    | Water / delivery / construction overlay |
+| `H` / `?`          | Builder’s guide                         |
+
+The speed controls run the simulation at 1×, 2×, or 4×. A day lasts six fixed simulation ticks; wet and dry seasons last 90 days each.
+
+## Royal campaign
+
+| Chapter                        | Objectives                                                                                                                                                                | Reward                         |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| A city sustained by water      | Complete a new canal, paddy, and baray                                                                                                                                    | 50 merit                       |
+| Bring the settlement together  | Complete two dwellings, five road tiles, and one bridge                                                                                                                   | 100 merit, 40 timber, 100 rice |
+| Carry the city through drought | Three healthy irrigated fields, 150 rice in reserve, and five consecutive fully fed dry-season days with at least two healthy irrigated fields and no hunger              | 200 merit, 50 laterite         |
+| A kingdom well supplied        | Complete a granary, receive 200 rice deliveries, and maintain 100 residents                                                                                               | 150 merit, 60 timber           |
+| An enduring temple city        | Complete a workshop and an operational stage-three temple, receive 100 sandstone, maintain 120 residents, and sustain seven fully fed days with no hunger or ruined homes | 250 merit, 40 sandstone        |
+
+Delivered cargo totals accumulate from the beginning of the campaign; daily streaks begin only when their chapter becomes active. Historic construction goals remain fulfilled after demolition. Live conditions can regress before a commission is awarded. Rewards respect resource storage limits.
+
+## Architecture
+
+```text
+src/
+├── core/          # Typed world, commands, construction state, saves and migration
+├── simulation/    # Water, survival, campaign progression, A*, logistics, repairs, workforce
+├── rendering/     # PixiJS scene, texture atlas, scaffolding, isometric mapping, camera
+├── ui/            # HUD, survival warnings, project controls, refunds, responsive styles
+├── data/          # Balance, buildings, royal commissions, objectives and era unlocks
+└── main.ts        # Initialization and lifecycle
+tests/             # Deterministic simulation and state validation tests
+```
+
+`Game` owns authoritative state. Commands validate placement and affordability before reserving materials and creating a construction project. Crew assignment enforces the shared workforce budget. `Construction` advances builder work at the current hunger productivity, activates completed buildings, repairs damage, and records construction investment. `Survival` applies drought and flood exposure on daily boundaries, then consumes food after delivery arrivals and reconciles population and crews. Consequences use simulation ticks, so speed changes and pause do not change the rules. `Progression` evaluates the active commission after construction, deliveries, and daily survival, grants rewards once, and records merit milestones. Production and support services share one canonical whole-building staffing order. `GameLoop` advances the simulation in 500 ms fixed steps and renders independently with interpolation. Simulation modules have no dependency on PixiJS or the DOM.
+
+Each building retains a terrain snapshot and its actual completed investment. Floodgates and bridges can retain a completed canal as an underlay; removal restores that original structure and ID. Project costs remain separate from completed investment so cancellation and demolition refunds cannot double count materials. Demolition restores terrain without deleting water, removes source delivery jobs, and reconciles builder assignments after population changes.
+
+The water automaton reads the old state and accumulates pressure-driven flux in a second buffer. Each donor is limited to half its water per tick, so multiple neighbors cannot overspend its volume. Volume is conserved with weather disabled. Rain, river inflow, and evaporation are explicit sources and sinks. Closed gates reduce permeability and block barge paths. This is an intentionally lightweight 2D approximation, not a physically calibrated hydraulic model.
+
+A* uses a binary min-heap, Manhattan distance, and mode-specific traversal. The worker heuristic is scaled to the minimum traversal cost to remain admissible with roads: roads and bridges cost 0.65, open land costs 1, and forests cost 2. Worker movement uses the same cost to speed up travel on paths. Barges need a water depth of at least 0.45. Delivery jobs carry actual cargo, which enters the global resource pool only on arrival. Rice consumption happens each simulation day. Rates in the resource bar share the production calculation: staffing, irrigation, crop stress, condition, flooding, and hunger all reduce output. Delivery connectivity and travel time determine when cargo reaches the granary. Production stock retains fractional output so impaired workers can still make gradual progress.
+
+The 32 × 32 deterministic starting world uses one procedural canvas texture atlas shared by PixiJS sprites. All artwork is local. Tiles, trees, and buildings are created once and sorted by depth; changing overlays and water tint does not rebuild the scene. The UI uses self-hosted DM Sans and Cormorant Garamond, plus Phosphor icons.
+
+## Saves
+
+Every 30 seconds, the complete versioned state is written to IndexedDB with a LocalStorage backup. Leaving or hiding the page also writes a synchronous backup. Startup restores the newest valid copy. Version 4 saves add the highest merit reached, completed commission IDs, delivered cargo totals, and the active daily streak to the complete city and survival state. Version 1, 2, and 3 saves and JSON exports migrate automatically. An already awarded first commission remains complete without paying its reward again; unavailable historic delivery totals begin at zero. Version 3 survival damage, hunger, and ongoing repairs are preserved. Older versions receive healthy buildings and no starting hunger; existing infrastructure becomes editable without resetting the economy.
+
+Save validation checks schemas, grid dimensions, numeric bounds, resources, building and underlay IDs, footprints and terrain snapshots, fractional project progress and crew budgets, survival counters, condition, crop data, couriers, chronicle records, ordered campaign claims, delivery totals, merit milestones, and daily streak bounds. If IndexedDB is unavailable, LocalStorage can still save the game.
+
+Settings supports downloading and importing JSON saves, an evening interface, and starting a fresh settlement. Importing and resetting reloads the application after a successful save. Saves are local to this browser and origin; clearing site data removes them. There is no cloud sync in this initial codebase.
+
+## Scope and next steps
+
+This prototype includes a five-chapter royal campaign, permanent merit unlocks, working granary and workshop benefits, the resource loop, drought-driven crop failures and recovery, flood damage and timed repairs, food shortages and population consequences, timed construction and temple upgrades, shared builder assignment, demolition and refunds, buildable roads and bridges, hydraulic simulation, routing, rendering, and local persistence. Builder labor is pooled; the crews drawn at sites do not yet travel there as individual agents. Detailed foundation stability, erosion and silt, a bas-relief minigame, audio, campaign maps, cloud saves, and a PWA are future work. Historical themes guide the visual language, while map dimensions, units, dates, resource rates, and progression are game balance abstractions.
+
+The design document also envisions regional campaigns from the Tonlé Sap floodplain to the Kulen foothills, Khmer kbach ornament, and a soundscape inspired by pinpeat music.
 
 ## Documentation
 
 - [Game Design Document (PDF)](docs/Angkor_Architect_Game_Design_Document.pdf)
-
-## Project Structure
-
-```text
-Angkor-Architecture/
-└── docs/
-    └── Angkor_Architect_Game_Design_Document.pdf
-```
 
 ## Author
 
