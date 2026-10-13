@@ -9,6 +9,8 @@ export const CONFIG = {
   autosaveMs: 30_000,
   maxResource: 99_999,
   maxCouriers: 36,
+  maxBuildersPerProject: 8,
+  demolitionRefund: 0.5,
 } as const;
 
 /** Inspired by Khmer hydraulic cities; gameplay rates are illustrative, not historical measurements. */

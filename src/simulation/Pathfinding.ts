@@ -1,4 +1,4 @@
-import type { GameState, Point } from '../core/types';
+import type { Courier, GameState, Point } from '../core/types';
 import { buildingAt, neighbors, tileAt } from '../core/world';
 
 interface Node {
@@ -43,19 +43,36 @@ export function traversable(state: GameState, p: Point, mode: TravelMode): boole
   const t = tileAt(state, p.x, p.y);
   if (!t) return false;
   const building = buildingAt(state, p.x, p.y);
-  const bridge = t.terrain === 'road' && t.elevation < 0;
+  const bridge = t.terrain === 'bridge';
   if (mode === 'barge')
     return (
       (['water', 'canal', 'reservoir'].includes(t.terrain) || bridge) &&
       t.water >= 0.45 &&
-      !(building?.kind === 'gate' && !building.enabled)
+      !(building?.kind === 'gate' && !building.construction && !building.enabled)
     );
   if (bridge) return true;
+  if (building?.construction?.type === 'build') return false;
   return (
     !['water', 'reservoir'].includes(t.terrain) &&
     t.water < 0.8 &&
-    (!building || ['paddy', 'dock', 'house', 'lumber', 'quarry'].includes(building.kind))
+    (!building ||
+      ['paddy', 'dock', 'house', 'lumber', 'quarry', 'road', 'canal'].includes(building.kind))
   );
+}
+export function traversalCost(state: GameState, p: Point, mode: TravelMode) {
+  const t = tileAt(state, p.x, p.y)!;
+  return mode === 'barge'
+    ? 1
+    : ['road', 'bridge'].includes(t.terrain)
+      ? 0.65
+      : t.terrain === 'forest'
+        ? 2
+        : 1;
+}
+export function movementRate(state: GameState, c: Courier) {
+  if (c.kind === 'barge') return 0.23;
+  const next = c.path[Math.min(Math.floor(c.progress) + 1, c.path.length - 1)]!;
+  return 0.42 / traversalCost(state, next, 'worker');
 }
 /** Manhattan A* with a binary heap and per-node cost; returns null for unreachable destinations. */
 export function findPath(
@@ -66,7 +83,8 @@ export function findPath(
 ): Point[] | null {
   if (!traversable(state, start, mode) || !traversable(state, goal, mode)) return null;
   const key = (p: Point) => p.y * state.width + p.x;
-  const heuristic = (p: Point) => Math.abs(p.x - goal.x) + Math.abs(p.y - goal.y);
+  const heuristic = (p: Point) =>
+    (Math.abs(p.x - goal.x) + Math.abs(p.y - goal.y)) * (mode === 'worker' ? 0.65 : 1);
   const open = new MinHeap();
   const costs = new Map<number, number>([[key(start), 0]]);
   const parents = new Map<number, number>();
@@ -86,8 +104,7 @@ export function findPath(
     }
     for (const p of neighbors(current.point)) {
       if (!traversable(state, p, mode)) continue;
-      const t = tileAt(state, p.x, p.y)!;
-      const g = current.g + (mode === 'worker' && t.terrain === 'forest' ? 2 : 1);
+      const g = current.g + traversalCost(state, p, mode);
       const k = key(p);
       if (g >= (costs.get(k) ?? Infinity)) continue;
       costs.set(k, g);

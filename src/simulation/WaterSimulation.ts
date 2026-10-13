@@ -9,7 +9,8 @@ export class WaterSimulation {
     this.delta.fill(0);
     const gateResistance = new Map<number, number>();
     for (const b of state.buildings)
-      if (b.kind === 'gate' && !b.enabled) gateResistance.set(b.y * state.width + b.x, 0.02);
+      if (b.kind === 'gate' && !b.construction && !b.enabled)
+        gateResistance.set(b.y * state.width + b.x, 0.02);
     for (let i = 0; i < state.tiles.length; i++) {
       const tile = state.tiles[i]!;
       if (tile.water <= 0) continue;
@@ -43,7 +44,7 @@ export class WaterSimulation {
       const tile = state.tiles[i]!;
       let water = tile.water + this.delta[i]!;
       if (weather) {
-        const channel = ['water', 'reservoir', 'canal'].includes(tile.terrain);
+        const channel = ['water', 'reservoir', 'canal', 'bridge'].includes(tile.terrain);
         water += channel ? season.rain - season.evaporation : -season.evaporation * 2;
         if (tile.terrain === 'water') water += (season.wet ? 5.8 : 3.2) > water ? 0.05 : 0;
       }
@@ -58,7 +59,7 @@ export class WaterSimulation {
         const ny = y + dy;
         if (nx < 0 || ny < 0 || nx >= state.width || ny >= state.height) continue;
         const t = state.tiles[ny * state.width + nx]!;
-        if (['water', 'canal', 'reservoir'].includes(t.terrain))
+        if (['water', 'canal', 'reservoir', 'bridge'].includes(t.terrain))
           best = Math.max(best, Math.min(1, t.water / 2.5));
       }
     return best;

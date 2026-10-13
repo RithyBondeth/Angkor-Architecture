@@ -2,6 +2,8 @@ import { Application, Container, Graphics, Sprite, Text } from 'pixi.js';
 import { BUILDINGS } from '../data/buildings';
 import { buildingAt, footprint, tileAt } from '../core/world';
 import type { BuildingKind, Overlay, Point } from '../core/types';
+import { movementRate } from '../simulation/Pathfinding';
+import { constructionSite } from './ConstructionSite';
 import type { Game } from '../core/Game';
 import { Camera } from './Camera';
 import { TextureAtlas } from './TextureAtlas';
@@ -21,7 +23,8 @@ export class WorldRenderer {
   private readonly buildingSprites = new Map<string, Sprite>();
   private readonly courierSprites = new Map<string, Sprite>();
   private readonly treeSprites = new Map<number, Sprite>();
-  private bridgeCreated = false;
+  private readonly sites = new Map<string, ReturnType<typeof constructionSite>>();
+  private demolition = false;
   private readonly labels = new Container();
   private selected: string | null = null;
   private placement: BuildingKind | null = null;
@@ -34,6 +37,7 @@ export class WorldRenderer {
   onPlace: (message: string, ok: boolean) => void = () => {};
   onHover: (message: string) => void = () => {};
   onZoom: (zoom: number) => void = () => {};
+  onDemolish: (id: string) => void = () => {};
   constructor(
     private readonly game: Game,
     private readonly host: HTMLElement,
@@ -118,7 +122,7 @@ export class WorldRenderer {
         sprite.label = key;
       }
       sprite.tint = this.overlay === 'water' ? (t.water > 0.45 ? 0x8fc8d4 : 0xa3ab81) : 0xffffff;
-      const channel = ['water', 'reservoir', 'canal'].includes(t.terrain);
+      const channel = ['water', 'reservoir', 'canal', 'bridge'].includes(t.terrain);
       const flood = this.waterMarkers[i]!;
       flood.alpha = channel ? 0 : Math.min(0.6, t.water * 0.55);
       if (channel && t.water < 0.45) sprite.tint = 0xa7ac7b;
@@ -137,20 +141,39 @@ export class WorldRenderer {
         this.treeSprites.get(i)!.destroy();
         this.treeSprites.delete(i);
       }
-      if (t.terrain === 'road' && t.elevation < 0 && !this.bridgeCreated) {
-        const bridge = new Graphics()
-          .poly([-36, -2, 0, -20, 36, -2, 0, 16])
-          .fill(0xb4a073)
-          .stroke({ color: 0xd0bd8d, width: 2 });
-        const p = toScreen(t.x, t.y);
-        bridge.position.set(p.x, p.y - 3);
-        bridge.zIndex = p.y + 3;
-        this.objects.addChild(bridge);
-        this.bridgeCreated = true;
-      }
     }
+    for (const [id, sprite] of this.buildingSprites)
+      if (!state.buildings.some((b) => b.id === id)) {
+        sprite.destroy();
+        this.buildingSprites.delete(id);
+      }
+    for (const [id, site] of this.sites)
+      if (!state.buildings.some((b) => b.id === id && b.construction)) {
+        site.view.destroy({ children: true });
+        this.sites.delete(id);
+      }
     for (const b of state.buildings) {
-      if (b.kind === 'canal') continue;
+      const size = BUILDINGS[b.kind].size;
+      const center = toScreen(b.x + (size - 1) / 2, b.y + (size - 1) / 2);
+      if (b.construction) {
+        let site = this.sites.get(b.id);
+        if (!site) {
+          site = constructionSite(b, this.atlas);
+          site.view.position.set(center.x, center.y);
+          site.view.zIndex = center.y + size * 8 + 1;
+          this.objects.addChild(site.view);
+          this.sites.set(b.id, site);
+        }
+        const p = b.construction;
+        site.label.text = p.paused
+          ? 'Paused'
+          : !p.builders
+            ? 'Queued'
+            : `${Math.floor((p.workDone / p.workRequired) * 100)}%`;
+        site.label.style.fontSize = 9;
+        site.workers.forEach((worker, i) => (worker.visible = !p.paused && i < p.builders));
+      }
+      if (b.kind === 'canal' || b.kind === 'road') continue;
       const artwork = b.kind === 'temple' && b.level === 1 ? 'temple-foundation' : b.kind;
       let sprite = this.buildingSprites.get(b.id);
       if (!sprite) {
@@ -160,7 +183,7 @@ export class WorldRenderer {
         const p = toScreen(b.x + (size - 1) / 2, b.y + (size - 1) / 2);
         sprite.position.set(p.x, p.y);
         sprite.zIndex = p.y + size * 8;
-        if (size === 1) sprite.scale.set(0.72);
+        if (size === 1 && b.kind !== 'bridge') sprite.scale.set(0.72);
         this.objects.addChild(sprite);
         this.buildingSprites.set(b.id, sprite);
       }
@@ -168,9 +191,22 @@ export class WorldRenderer {
         sprite.texture = this.atlas.get(artwork);
         sprite.label = artwork;
       }
-      sprite.alpha = b.enabled ? 1 : 0.55;
+      sprite.alpha =
+        b.construction?.type === 'build'
+          ? 0.28
+          : b.construction?.type === 'upgrade'
+            ? 0.7
+            : b.enabled
+              ? 1
+              : 0.55;
       sprite.tint = this.selected === b.id ? 0xfff2cf : 0xffffff;
     }
+    this.labels.children[0]!.visible = state.buildings.some(
+      (b) => b.kind === 'baray' && b.x === 7 && b.y === 8,
+    );
+    this.labels.children[1]!.visible = state.buildings.some(
+      (b) => b.kind === 'temple' && b.x === 16 && b.y === 13,
+    );
     for (const [id, sprite] of this.courierSprites)
       if (!state.couriers.some((c) => c.id === id)) {
         sprite.destroy();
@@ -194,7 +230,7 @@ export class WorldRenderer {
       const progress = Math.min(
         c.path.length - 1,
         c.progress +
-          (this.game.state.speed > 0 ? interpolation * (c.kind === 'barge' ? 0.23 : 0.42) : 0),
+          (this.game.state.speed > 0 ? interpolation * movementRate(this.game.state, c) : 0),
       );
       const index = Math.floor(progress);
       const from = c.path[index]!;
@@ -218,6 +254,11 @@ export class WorldRenderer {
     this.host.classList.toggle('placing', !!kind);
     this.drawHighlight();
   }
+  setDemolition(active: boolean) {
+    this.demolition = active;
+    this.host.classList.toggle('demolishing', active);
+    this.drawHighlight();
+  }
   setOverlay(overlay: Overlay) {
     this.overlay = overlay;
     this.sync();
@@ -227,9 +268,18 @@ export class WorldRenderer {
   }
   private click(x: number, y: number) {
     const p = this.point(x, y);
-    if (this.placement) {
+    if (this.demolition) {
+      const b = buildingAt(this.game.state, p.x, p.y);
+      if (b) this.onDemolish(b.id);
+      else this.onPlace('Choose a building, road, or bridge to remove.', false);
+    } else if (this.placement) {
       const result = this.game.place(this.placement, p);
       this.onPlace(result.message, result.ok);
+      if (result.ok) {
+        const b = buildingAt(this.game.state, p.x, p.y);
+        this.select(b?.id ?? null);
+        this.onSelect(b?.id ?? null);
+      }
     } else {
       const b = buildingAt(this.game.state, p.x, p.y);
       this.select(b?.id ?? null);
@@ -241,7 +291,14 @@ export class WorldRenderer {
     if (this.hover?.x === p.x && this.hover.y === p.y) return;
     this.hover = p;
     this.drawHighlight();
-    if (this.placement) this.onHover(this.game.canPlace(this.placement, p).message);
+    if (this.demolition) {
+      const b = buildingAt(this.game.state, p.x, p.y);
+      this.onHover(
+        b
+          ? `Click to review removal of ${BUILDINGS[b.kind].name.toLowerCase()}.`
+          : 'Choose a structure to remove.',
+      );
+    } else if (this.placement) this.onHover(this.game.canPlace(this.placement, p).message);
     else {
       const b = buildingAt(this.game.state, p.x, p.y);
       this.onHover(b ? BUILDINGS[b.kind].name : 'Drag to explore • Scroll to zoom');
@@ -251,10 +308,18 @@ export class WorldRenderer {
     this.highlight.clear();
     const selected = this.game.state.buildings.find((b) => b.id === this.selected);
     const origin =
-      this.placement && this.hover ? { ...this.hover, kind: this.placement } : selected;
+      this.demolition && this.hover
+        ? buildingAt(this.game.state, this.hover.x, this.hover.y)
+        : this.placement && this.hover
+          ? { ...this.hover, kind: this.placement }
+          : selected;
     if (!origin) return;
     const cells = footprint(origin);
-    const valid = this.placement ? this.game.canPlace(this.placement, origin).ok : true;
+    const valid = this.demolition
+      ? false
+      : this.placement
+        ? this.game.canPlace(this.placement, origin).ok
+        : true;
     for (const c of cells) {
       if (!tileAt(this.game.state, c.x, c.y)) continue;
       const p = toScreen(c.x, c.y);

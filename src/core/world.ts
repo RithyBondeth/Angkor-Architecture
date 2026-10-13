@@ -1,5 +1,6 @@
 import { CONFIG } from '../data/config';
 import { BUILDINGS } from '../data/buildings';
+import { completedBuilding, registerInfrastructure } from './buildingState';
 import type { Building, BuildingKind, GameState, Point, Tile } from './types';
 
 export function tileAt(
@@ -45,7 +46,7 @@ export function createWorld(seed = 802): GameState {
   const rand = random(seed);
   const size = CONFIG.worldSize;
   const state: GameState = {
-    version: 1,
+    version: 2,
     seed,
     width: size,
     height: size,
@@ -85,15 +86,7 @@ export function createWorld(seed = 802): GameState {
       });
     }
   const add = (kind: BuildingKind, x: number, y: number, level = 1) => {
-    const building: Building = {
-      id: `b${state.nextId++}`,
-      kind,
-      x,
-      y,
-      level,
-      enabled: true,
-      stock: 0,
-    };
+    const building = completedBuilding(state, kind, x, y, level);
     state.buildings.push(building);
     for (const p of footprint(building)) {
       const t = tileAt(state, p.x, p.y)!;
@@ -138,6 +131,7 @@ export function createWorld(seed = 802): GameState {
     if (!buildingAt(state, x, 18) && t.terrain !== 'canal') t.terrain = 'road';
   }
   // A road over a low canal bed is a bridge: both workers and barges can pass.
-  tileAt(state, 13, 18)!.terrain = 'road';
+  tileAt(state, 13, 18)!.terrain = 'bridge';
+  registerInfrastructure(state);
   return state;
 }
