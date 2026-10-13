@@ -34,6 +34,7 @@ export class Construction {
           } else if (building.kind === 'road' || building.kind === 'bridge')
             tile.terrain = building.kind;
           else if (building.kind !== 'gate') tile.terrain = 'grass';
+          if (tile.terrain !== 'forest') tile.timber = 0;
         }
         if (building.kind === 'house') state.population += 8;
         state.built[building.kind] = (state.built[building.kind] ?? 0) + 1;

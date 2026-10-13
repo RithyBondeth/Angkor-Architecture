@@ -318,6 +318,8 @@ export class TextureAtlas {
       'bridge',
       'granary',
       'workshop',
+      'warehouse',
+      'lateritepit',
     ] as BuildingKind[])
       this.add(kind, 384, 320, (c) => this.building(c, kind));
     this.add('temple-foundation', 384, 320, (c) => this.building(c, 'temple', 1));
@@ -735,6 +737,68 @@ export class TextureAtlas {
         ellipse(c, 40, 28, 6, 4, '#b9a475');
         ellipse(c, 41, 25, 5, 4, '#d3c18d');
       }
+    } else if (kind === 'warehouse') {
+      box(c, 0, 8, 68, 34, 7, '#c3b69a', '#9d957a', '#87876a');
+      dwelling(c, -12, -10, 1.35, '#88734d');
+      for (let i = 0; i < 6; i++)
+        box(
+          c,
+          20 + (i % 3) * 12,
+          26 - Math.floor(i / 3) * 12,
+          8,
+          4,
+          10,
+          '#dac399',
+          '#b39971',
+          '#958460',
+        );
+      line(
+        c,
+        [
+          [-55, 20],
+          [-28, 34],
+        ],
+        '#826b46',
+        6,
+      );
+      ellipse(c, -50, 29, 6, 8, '#74694c');
+      ellipse(c, -24, 39, 6, 8, '#74694c');
+    } else if (kind === 'lateritepit') {
+      box(c, 0, 4, 65, 32, 5, '#bc9476', '#97745a', '#805f48');
+      polygon(
+        c,
+        [
+          [-35, -4],
+          [0, -23],
+          [38, -4],
+          [0, 15],
+        ],
+        '#805b45',
+        '#d6ab81',
+      );
+      for (let i = 0; i < 8; i++)
+        box(
+          c,
+          -43 + (i % 4) * 16,
+          21 - Math.floor(i / 4) * 11,
+          8,
+          4,
+          9,
+          '#cd966d',
+          '#a76f50',
+          '#8f5b40',
+        );
+      dwelling(c, 25, -25, 0.58, '#b08a53');
+      line(
+        c,
+        [
+          [-30, -2],
+          [-8, -39],
+          [15, -27],
+        ],
+        '#9a8155',
+        4,
+      );
     } else if (kind === 'granary') {
       box(c, 0, 8, 65, 32, 6, '#c4b887', '#a19b71', '#8d906b');
       dwelling(c, 0, -5, 1.25, '#a98a4f');

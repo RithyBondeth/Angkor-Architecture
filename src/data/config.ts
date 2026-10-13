@@ -9,6 +9,17 @@ export const CONFIG = {
   autosaveMs: 30_000,
   maxResource: 99_999,
   maxCouriers: 36,
+  logistics: {
+    baseStorage: 1200,
+    warehouseStorage: 1200,
+    baseCarts: 4,
+    workersPerCart: 4,
+    warehouseCarts: 2,
+    dockBarges: 1,
+    workerCargo: 12,
+    bargeCargo: 40,
+    sourceBuffer: 100,
+  },
   maxBuildersPerProject: 8,
   demolitionRefund: 0.5,
   survival: {

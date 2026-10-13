@@ -205,11 +205,13 @@ describe('royal commissions and campaign', () => {
     const s = world(),
       b = add(s, 'paddy', 8, 8);
     expect(s.progression.delivered).toEqual({});
-    s.resources.rice = 99997.5;
+    const destination = add(s, 'house', 1, 1);
+    s.resources.rice = 1198.5;
     s.tick = 1;
     s.couriers.push({
       id: `c${s.nextId++}`,
       sourceId: b.id,
+      targetId: destination.id,
       kind: 'worker',
       path: [
         { x: 1, y: 1 },
@@ -220,17 +222,19 @@ describe('royal commissions and campaign', () => {
       amount: 10,
     });
     new Logistics().step(s);
-    expect(s.resources.rice).toBe(99999);
+    expect(s.resources.rice).toBe(1200);
     expect(s.progression.delivered.rice).toBe(1.5);
   });
   it('does not count disconnected shipments as delivered cargo', () => {
     const s = world(),
       b = add(s, 'paddy', 8, 8);
+    const destination = add(s, 'house', 1, 1);
     s.tick = 1;
     tileAt(s, 2, 1)!.water = 2;
     s.couriers.push({
       id: `c${s.nextId++}`,
       sourceId: b.id,
+      targetId: destination.id,
       kind: 'worker',
       path: [
         { x: 1, y: 1 },
@@ -338,7 +342,7 @@ describe('progression saves', () => {
     legacy.objectivesClaimed = true;
     delete legacy.progression;
     const copy = readGameState(legacy)!;
-    expect(copy.version).toBe(4);
+    expect(copy.version).toBe(5);
     expect(copy.survival).toEqual(legacy.survival);
     expect(copy.buildings).toEqual(legacy.buildings);
     expect(copy.resources).toEqual(legacy.resources);
@@ -368,7 +372,7 @@ describe('progression saves', () => {
     const s = createWorld(),
       persistence = new Persistence();
     await persistence.save(s);
-    expect(JSON.parse([...values.values()][0]!).schema).toBe(4);
+    expect(JSON.parse([...values.values()][0]!).schema).toBe(5);
     expect(await persistence.load()).toEqual(s);
   });
   it('rejects out-of-order or duplicate claims, unknown cargo, and invalid counters', () => {
