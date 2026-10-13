@@ -1,4 +1,8 @@
 import { BUILDINGS, BUILD_ORDER, RESOURCE_INFO } from '../data/buildings';
+import { templeDetails, reliefDialog } from './TempleUI';
+import { playerFeedback, waterWarnings } from './FeedbackUI';
+import { deliveredRate, lowWaterSites, lowReservoirs } from '../simulation/Feedback';
+import { workforce } from '../simulation/Workforce';
 import { CONFIG, ERAS } from '../data/config';
 import { SeasonManager } from '../core/SeasonManager';
 import { logisticsDetails, logisticsPanel, logisticsSummary } from './LogisticsUI';
@@ -84,6 +88,17 @@ export class HUD {
       this.update();
     };
     renderer.onResource = (message) => this.toast(message);
+    renderer.onPreview = (message, ok) => {
+      const banner = this.root.querySelector<HTMLElement>('#placement-banner')!;
+      banner.classList.toggle('invalid', !ok);
+      const status = banner.querySelector('small');
+      if (status && this.placement)
+        status.textContent = `${BUILDINGS[this.placement].size} × ${BUILDINGS[this.placement].size} · ${Object.entries(
+          BUILDINGS[this.placement].cost,
+        )
+          .map(([r, n]) => `${n} ${r}`)
+          .join(' + ')} · ${message}`;
+    };
     renderer.onHover = (message) => {
       this.root.querySelector('#map-hint')!.textContent = message;
     };
@@ -103,6 +118,26 @@ export class HUD {
         const button = (e.target as Element).closest<HTMLElement>('[data-action]');
         if (!button) return;
         const action = button.dataset.action;
+        if (action === 'excavate-moat') {
+          const result = this.game.excavateMoat(button.dataset.id!);
+          this.toast(result.message, !result.ok);
+        }
+        if (action === 'open-relief') this.openRelief(button.dataset.id!);
+        if (action === 'rotate-relief') {
+          const result = this.game.rotateRelief(button.dataset.id!, Number(button.dataset.cell));
+          if (result.ok) {
+            this.openRelief(button.dataset.id!);
+            const panel = this.root.querySelector<HTMLButtonElement>(
+              `dialog [data-cell="${button.dataset.cell}"]`,
+            );
+            if (panel?.disabled) {
+              const status = this.root.querySelector<HTMLElement>('.relief-status')!;
+              status.tabIndex = -1;
+              status.focus();
+            } else panel?.focus();
+            this.persistence.backup(this.game.state);
+          } else this.toast(result.message, true);
+        }
         if (action === 'demolish-mode') this.setDemolition(!this.demolition);
         if (action === 'builder-minus' || action === 'builder-plus') {
           const b = this.game.state.buildings.find((b) => b.id === button.dataset.id);
@@ -355,11 +390,17 @@ export class HUD {
     }
     if (this.demolition) this.setDemolition(false);
     this.placement = this.placement === kind ? null : kind;
-    this.renderer.setPlacement(this.placement);
     const banner = this.root.querySelector<HTMLElement>('#placement-banner')!;
     banner.hidden = !this.placement;
     if (this.placement)
-      banner.innerHTML = `${icon(BUILDINGS[this.placement].icon)}<span>Placing <strong>${BUILDINGS[this.placement].name}</strong><small>${BUILDINGS[this.placement].size} × ${BUILDINGS[this.placement].size} tiles • Click a valid site to begin construction</small></span><button data-action="cancel-build" aria-label="Cancel building">${icon('x')}<kbd>Esc</kbd></button>`;
+      banner.innerHTML = `${icon(BUILDINGS[this.placement].icon)}<span>Placing <strong>${BUILDINGS[this.placement].name}</strong><small>${BUILDINGS[this.placement].size} × ${BUILDINGS[this.placement].size} tiles · ${Object.entries(
+        BUILDINGS[this.placement].cost,
+      )
+        .map(([r, n]) => `${n} ${r}`)
+        .join(
+          ' + ',
+        )} · Move over a site to preview</small></span><button data-action="cancel-build" aria-label="Cancel building">${icon('x')}<kbd>Esc</kbd></button>`;
+    this.renderer.setPlacement(this.placement);
     this.root.querySelectorAll<HTMLElement>('[data-action="build"]').forEach((b) => {
       const selected = b.dataset.kind === this.placement;
       b.classList.toggle('selected', selected);
@@ -424,8 +465,10 @@ export class HUD {
       this.root.querySelector(`#resource-${resource}`)!.textContent = fmt(
         state.resources[resource],
       );
-      const rate = Logistics.rate(state, resource);
-      this.root.querySelector(`#rate-${resource}`)!.textContent = `+${fmt(rate)} / cycle`;
+      const rate = deliveredRate(state, resource);
+      const rateElement = this.root.querySelector<HTMLElement>(`#rate-${resource}`)!;
+      rateElement.textContent = `+${rate.toLocaleString('en-US', { maximumFractionDigits: 1 })} / min ${resource === 'merit' ? 'earned' : 'delivered'}`;
+      rateElement.title = `Actual receipts over the last 30 simulation seconds. Potential output: ${Logistics.rate(state, resource).toFixed(1)} per cycle. Rewards and refunds excluded.`;
       const capacity = storageCapacity(state, resource);
       this.root.querySelector<HTMLElement>(`#resource-${resource}`)!.title =
         resource === 'merit'
@@ -438,11 +481,15 @@ export class HUD {
       ).length || '',
     );
     this.root.querySelector('#population')!.textContent = fmt(state.population);
+    this.root.querySelector('#idle-count')!.textContent = `${workforce(state).available} idle`;
+    this.root.querySelector('#lowwater-count')!.textContent =
+      lowWaterSites(state).length + lowReservoirs(state).length
+        ? String(lowWaterSites(state).length + lowReservoirs(state).length)
+        : '';
     const riceRate = this.root.querySelector<HTMLElement>('#rate-rice')!;
-    riceRate.title = `${foodDays(state)} days of rice reserves; ${foodNeed(state)} rice needed per day.`;
+    riceRate.title += ` ${foodDays(state)} days of rice reserves; ${foodNeed(state)} rice needed per day.`;
     riceRate.classList.toggle('food-warning', state.population > 0 && foodDays(state) < 5);
-    if (state.population > 0 && foodDays(state) < 5)
-      riceRate.textContent = `${foodDays(state)} days · ${foodNeed(state)} / day`;
+
     this.root.querySelector('#happiness')!.textContent =
       state.survival.hunger > 0
         ? `${Math.round(productivity(state) * 100)}% productive`
@@ -501,7 +548,8 @@ export class HUD {
     this.inspector.classList.toggle('is-projects', this.panel !== 'overview');
     if (selected?.construction) {
       this.renderInspector(
-        constructionDetails(selected, state, this.renderer.atlas.thumbnail(selected.kind)),
+        constructionDetails(selected, state, this.renderer.atlas.thumbnail(selected.kind)) +
+          templeDetails(selected, state),
       );
       return;
     }
@@ -526,21 +574,24 @@ export class HUD {
       );
       const fill = Math.min(100, (volume / (def.size * def.size * 6)) * 100);
       this.renderInspector(
-        `<div class="panel-eyebrow">${def.category === 'water' ? 'Water management' : def.category === 'production' ? 'Production' : def.category === 'infrastructure' ? 'Paths & bridges' : 'Civic life'}<button class="icon-button" data-action="close-inspector" aria-label="Close building details">${icon('x')}</button></div><h2>${selected.kind === 'baray' ? 'Royal Baray' : def.name}</h2><p class="panel-subtitle">${def.subtitle}</p><div class="inspector-art"><img src="${this.renderer.atlas.thumbnail(selected.kind)}" alt="Isometric ${def.name.toLowerCase()}" /></div><div class="operational ${selected.enabled && selected.condition === 100 && !selected.crop?.failed ? '' : 'idle'}">${icon(selected.condition < 100 || selected.crop?.failed ? 'warning' : selected.enabled ? 'check-circle' : 'pause-circle')}${buildingStatus(selected)}</div><p class="building-description">${def.description}</p>${buildingSurvivalDetails(selected, state)}${supportDetails(selected, state)}${logisticsDetails(selected, state)}${selected.kind === 'baray' ? `<div class="stat-heading"><span>Water stored</span><strong>${Math.round(fill)}%</strong></div><div class="water-meter"><span style="width:${fill}%"></span></div><div class="water-volume">${fmt(volume * 40)} <span>/ ${fmt(def.size * def.size * 6 * 40)} m³</span></div><div class="detail-row"><span>${icon('cloud-rain')}Current season</span><strong>${SeasonManager.at(state.day).name}</strong></div><div class="detail-row"><span>${icon('plant')}Irrigated fields</span><strong>${state.buildings.filter((b) => b.kind === 'paddy' && !b.construction && WaterSimulation.irrigation(state, b.x, b.y) > 0.2).length} fields</strong></div>` : `<div class="detail-row"><span>${icon('users')}Workers</span><strong>${def.workers}</strong></div>${def.production ? `<div class="detail-row"><span>${icon(RESOURCE_INFO[def.production.resource].icon)}Output / cycle</span><strong>+${fmt(Logistics.outputs(state).get(selected.id) ?? 0)} ${RESOURCE_INFO[def.production.resource].name.toLowerCase()}</strong></div>` : ''}${selected.kind === 'paddy' ? `<div class="detail-row"><span>${icon('drop')}Irrigation</span><strong>${Math.round(irrigated * 100)}%</strong></div>` : ''}${selected.stock ? `<div class="detail-row"><span>Awaiting transport</span><strong>${fmt(selected.stock)}</strong></div>` : ''}`}${selected.kind === 'temple' ? `<div class="temple-stages">${['Laterite foundation', 'Sandstone towers', 'Sculpted reliefs'].map((s, i) => `<span class="${i < selected.level ? 'done' : ''}">${icon(i < selected.level ? 'check-circle' : 'circle')}${s}</span>`).join('')}</div>${templeUpgradeButton(selected, state)}` : ''}${!['baray', 'canal', 'house', 'road', 'bridge'].includes(selected.kind) ? `<button class="secondary-button full-width" data-action="toggle-building">${icon(selected.enabled ? 'pause' : 'play')}${selected.kind === 'gate' ? (selected.enabled ? 'Close floodgate' : 'Open floodgate') : ['granary', 'workshop', 'warehouse'].includes(selected.kind) ? (selected.enabled ? 'Pause service' : 'Resume service') : selected.enabled ? 'Pause production' : 'Resume production'}</button>` : ''}<button class="remove-structure full-width" data-action="remove-structure" data-id="${selected.id}" aria-label="Remove structure">${icon('trash')}Remove structure<span>Review refund</span></button>`,
+        `<div class="panel-eyebrow">${def.category === 'water' ? 'Water management' : def.category === 'production' ? 'Production' : def.category === 'infrastructure' ? 'Paths & bridges' : 'Civic life'}<button class="icon-button" data-action="close-inspector" aria-label="Close building details">${icon('x')}</button></div><h2>${selected.kind === 'baray' ? 'Royal Baray' : def.name}</h2><p class="panel-subtitle">${def.subtitle}</p><div class="inspector-art"><img src="${this.renderer.atlas.thumbnail(selected.kind)}" alt="Isometric ${def.name.toLowerCase()}" /></div><div class="operational ${selected.enabled && selected.condition === 100 && !selected.crop?.failed ? '' : 'idle'}">${icon(selected.condition < 100 || selected.crop?.failed ? 'warning' : selected.enabled ? 'check-circle' : 'pause-circle')}${buildingStatus(selected)}</div><p class="building-description">${def.description}</p>${buildingSurvivalDetails(selected, state)}${supportDetails(selected, state)}${logisticsDetails(selected, state)}${templeDetails(selected, state)}${selected.kind === 'baray' ? `<div class="stat-heading"><span>Water stored</span><strong>${Math.round(fill)}%</strong></div><div class="water-meter"><span style="width:${fill}%"></span></div><div class="water-volume">${fmt(volume * 40)} <span>/ ${fmt(def.size * def.size * 6 * 40)} m³</span></div><div class="detail-row"><span>${icon('cloud-rain')}Current season</span><strong>${SeasonManager.at(state.day).name}</strong></div><div class="detail-row"><span>${icon('plant')}Irrigated fields</span><strong>${state.buildings.filter((b) => b.kind === 'paddy' && !b.construction && WaterSimulation.irrigation(state, b.x, b.y) > 0.2).length} fields</strong></div>` : `<div class="detail-row"><span>${icon('users')}Workers</span><strong>${def.workers}</strong></div>${def.production ? `<div class="detail-row"><span>${icon(RESOURCE_INFO[def.production.resource].icon)}Potential / cycle</span><strong>+${fmt(Logistics.outputs(state).get(selected.id) ?? 0)} ${RESOURCE_INFO[def.production.resource].name.toLowerCase()}</strong></div>` : ''}${selected.kind === 'paddy' ? `<div class="detail-row"><span>${icon('drop')}Irrigation</span><strong>${Math.round(irrigated * 100)}%</strong></div>` : ''}${selected.stock ? `<div class="detail-row"><span>Awaiting transport</span><strong>${fmt(selected.stock)}</strong></div>` : ''}`}${selected.kind === 'temple' ? `<div class="temple-stages">${['Laterite foundation', 'Sandstone towers', 'Sculpted reliefs'].map((s, i) => `<span class="${i < selected.level ? 'done' : ''}">${icon(i < selected.level ? 'check-circle' : 'circle')}${s}</span>`).join('')}</div>${templeUpgradeButton(selected, state)}` : ''}${!['baray', 'canal', 'moat', 'house', 'road', 'bridge'].includes(selected.kind) ? `<button class="secondary-button full-width" data-action="toggle-building">${icon(selected.enabled ? 'pause' : 'play')}${selected.kind === 'gate' ? (selected.enabled ? 'Close floodgate' : 'Open floodgate') : ['granary', 'workshop', 'warehouse'].includes(selected.kind) ? (selected.enabled ? 'Pause service' : 'Resume service') : selected.enabled ? 'Pause production' : 'Resume production'}</button>` : ''}<button class="remove-structure full-width" data-action="remove-structure" data-id="${selected.id}" aria-label="Remove structure">${icon('trash')}Remove structure<span>Review refund</span></button>`,
       );
       return;
     }
     if (this.panel === 'overview') {
       this.renderInspector(
-        commissionOverview(state) + survivalSummary(state) + logisticsSummary(state),
+        commissionOverview(state) +
+          playerFeedback(state) +
+          survivalSummary(state) +
+          logisticsSummary(state),
       );
     } else if (this.panel === 'water') {
       const channels = state.tiles.filter((t) =>
-        ['canal', 'reservoir', 'bridge'].includes(t.terrain),
+        ['canal', 'moat', 'reservoir', 'bridge'].includes(t.terrain),
       );
       const stored = channels.reduce((n, t) => n + t.water, 0);
       this.renderInspector(
-        `<div class="panel-eyebrow">Hydraulic network ${icon('waves')}</div><h2>Water is life.</h2><p class="panel-subtitle">Guide it wisely through your kingdom.</p><div class="big-stat">${fmt(stored * 40)}<small>m³ in reservoirs & canals</small></div><div class="detail-row"><span>Reservoirs</span><strong>${state.buildings.filter((b) => b.kind === 'baray' && !b.construction).length}</strong></div><div class="detail-row"><span>Canal tiles</span><strong>${state.tiles.filter((t) => t.terrain === 'canal').length}</strong></div><div class="detail-row"><span>Irrigated fields</span><strong>${state.buildings.filter((b) => b.kind === 'paddy' && !b.construction && WaterSimulation.irrigation(state, b.x, b.y) > 0.2).length}</strong></div><p class="building-description">The blue overlay reveals water depth. Low land fills first; connected canals carry water and stone through the city.</p><button class="primary-button" data-action="water-buildings">${icon('plus')}Build a reservoir</button>`,
+        `<div class="panel-eyebrow">Hydraulic network ${icon('waves')}</div><h2>Water is life.</h2>${playerFeedback(state)}${waterWarnings(state)}<p class="panel-subtitle">Guide it wisely through your kingdom.</p><div class="big-stat">${fmt(stored * 40)}<small>m³ in reservoirs & canals</small></div><div class="detail-row"><span>Reservoirs</span><strong>${state.buildings.filter((b) => b.kind === 'baray' && !b.construction).length}</strong></div><div class="detail-row"><span>Canal tiles</span><strong>${state.tiles.filter((t) => t.terrain === 'canal').length}</strong></div><div class="detail-row"><span>Irrigated fields</span><strong>${state.buildings.filter((b) => b.kind === 'paddy' && !b.construction && WaterSimulation.irrigation(state, b.x, b.y) > 0.2).length}</strong></div><p class="building-description">The blue overlay reveals water depth. Low land fills first; connected canals carry water and stone through the city.</p><button class="primary-button" data-action="water-buildings">${icon('plus')}Build a reservoir</button>`,
       );
     } else if (this.panel === 'workforce') {
       this.renderInspector(logisticsPanel(state));
@@ -627,7 +678,7 @@ export class HUD {
           ? '#72a397'
           : t.terrain === 'forest'
             ? '#6c8858'
-            : ['canal', 'reservoir', 'bridge'].includes(t.terrain)
+            : ['canal', 'moat', 'reservoir', 'bridge'].includes(t.terrain)
               ? '#8db5a3'
               : t.terrain === 'road'
                 ? '#d2c7a0'
@@ -635,7 +686,7 @@ export class HUD {
       c.fillRect(t.x * size, t.y * size, size, size);
     }
     for (const b of s.buildings) {
-      if (!b.construction && ['canal', 'road', 'bridge'].includes(b.kind)) continue;
+      if (!b.construction && ['canal', 'moat', 'road', 'bridge'].includes(b.kind)) continue;
       c.fillStyle = b.construction
         ? '#b99b66'
         : b.kind === 'baray'
@@ -677,6 +728,18 @@ export class HUD {
       toast.hidden = true;
     }, 4200);
   }
+  private openRelief(id: string) {
+    const b = this.game.state.buildings.find((b) => b.id === id && b.engineering);
+    if (!b || b.level !== 2 || b.construction?.type !== 'upgrade') return;
+    const dialog = this.root.querySelector<HTMLDialogElement>('dialog')!;
+    if (!dialog.open) {
+      this.dialogResumeSpeed = this.game.state.speed;
+      this.game.setSpeed(0);
+    }
+    dialog.setAttribute('aria-label', 'Bas-relief carving');
+    dialog.innerHTML = reliefDialog(b);
+    if (!dialog.open) dialog.showModal();
+  }
   private openDialog(kind: 'guide' | 'settings') {
     const dialog = this.root.querySelector<HTMLDialogElement>('dialog')!;
     dialog.setAttribute('aria-label', kind === 'guide' ? 'Builder’s guide' : 'Game settings');
@@ -691,7 +754,7 @@ export class HUD {
 }
 
 export function createShell(root: HTMLElement) {
-  root.innerHTML = `<div class="game-shell"><aside class="sidebar"><a href="/" class="brand" aria-label="Angkor Architect home"><span class="brand-mark">${icon('bank')}</span><span>ANGKOR<small>ARCHITECT</small></span></a><div class="sidebar-divider"></div><div class="settlement-badge"><span class="settlement-seal">R</span><div><strong>Roluos settlement</strong><span>Your growing kingdom</span></div></div><span class="nav-label">YOUR KINGDOM</span><nav aria-label="Kingdom views"><button class="nav-item active" data-action="panel" data-panel="overview">${icon('squares-four')}<span>City overview</span></button><button class="nav-item" data-action="panel" data-panel="water">${icon('waves')}<span>Water management</span></button><button class="nav-item" data-action="panel" data-panel="workforce">${icon('users-three')}<span>People & logistics</span><small id="logistics-count" aria-label="worksites needing attention"></small></button><button class="nav-item" data-action="panel" data-panel="survival" aria-label="Food & resilience" title="Food & resilience">${icon('bowl-food')}<span>Food & resilience</span></button><button class="nav-item" data-action="panel" data-panel="construction" title="Construction projects">${icon('hammer')}<span>Construction</span><small id="projects-count">0</small></button><button class="nav-item" data-action="panel" data-panel="campaign" aria-label="Royal campaign" title="Royal campaign">${icon('flag-pennant')}<span>Royal commissions</span></button><button class="nav-item" data-action="panel" data-panel="monuments">${icon('bank')}<span>Monuments</span></button><button class="nav-item" data-action="panel" data-panel="chronicle">${icon('scroll')}<span>City chronicle</span></button></nav><div class="sidebar-bottom"><div class="era-icon">${icon('plant')}</div><span class="nav-label">AN EMPIRE IN THE MAKING</span><h3 id="era-name">The founding of Angkor</h3><p>Greatness grows where<br>the waters flow.</p><div class="season-track"><span id="season-progress"></span></div><span id="sidebar-season"></span><button class="guide-link" data-action="guide">${icon('book-open-text')}Builder’s guide ${icon('arrow-up-right')}</button><div class="sidebar-footer"><span>${icon('compass')}Made for a lasting legacy</span></div></div></aside><div class="workspace"><header class="topbar"><div class="breadcrumbs">${icon('house-line')}<span>Your kingdom</span>${icon('caret-right')}<strong>Angkor Core</strong></div><div class="topbar-actions"><span class="save-indicator">${icon('check-circle')}<span id="save-status">Local kingdom</span></span><button class="save-button" data-action="save">${icon('floppy-disk')}Save game</button><span class="topbar-divider"></span><button class="icon-button" data-action="guide" aria-label="Open builder’s guide" title="Builder’s guide (H)">${icon('question')}</button><button class="icon-button" data-action="settings" aria-label="Open settings" title="Settings">${icon('gear-six')}</button><span class="builder-avatar" title="Royal master builder">K</span></div></header><section class="resource-bar" aria-label="Kingdom resources">${(Object.keys(RESOURCE_INFO) as Resource[]).map((r) => `<div class="resource"><span class="resource-icon ${r}">${icon(RESOURCE_INFO[r].icon)}</span><div><span class="resource-label">${RESOURCE_INFO[r].name}</span><strong id="resource-${r}">0</strong><small id="rate-${r}"></small></div></div>`).join('')}<div class="resource population-resource"><span class="resource-icon people">${icon('users-three')}</span><div><span class="resource-label">Population</span><strong id="population">84</strong><small id="happiness">88% content</small></div></div></section><main class="map-area"><div id="world"><div class="world-loading"><span class="loading-temple">${icon('bank')}</span><strong>Preparing your kingdom</strong><span>The waters are finding their way.</span></div></div><div class="world-heading"><div><span class="region-label">THE KHMER EMPIRE <span id="game-date">802 CE</span></span><h1>Angkor Core</h1><p>A fertile land. An enduring legacy.</p></div><div class="weather-badge"><span id="season-icon">${icon('cloud-rain')}</span><div><strong id="season-name">Wet season</strong><small id="season-detail">The monsoon is here</small></div></div></div><div class="map-top-controls"><div class="map-view-buttons" aria-label="Map overlays"><button class="icon-button" data-action="overlay" data-overlay="water" aria-label="Toggle water overlay" aria-pressed="false" title="Water depth (W)">${icon('drop')}</button><button class="icon-button" data-action="overlay" data-overlay="logistics" aria-label="Toggle logistics overlay" aria-pressed="false" title="Delivery routes (L)">${icon('path')}</button><button class="icon-button" data-action="overlay" data-overlay="resources" aria-label="Toggle resource deposits" aria-pressed="false" title="Resource deposits (R)">${icon('mountains')}</button><button class="icon-button" data-action="overlay" data-overlay="grid" aria-label="Toggle construction grid" aria-pressed="false" title="Grid (G)">${icon('grid-four')}</button><button class="icon-button demolition-tool" data-action="demolish-mode" aria-label="Toggle demolition tool" aria-pressed="false" title="Remove structures (X)">${icon('trash')}</button></div><span id="overlay-label" hidden></span></div><aside id="inspector" class="inspector" aria-label="Kingdom information"></aside><div class="map-bottom-controls"><div class="time-controls"><button class="icon-button" data-action="pause" aria-label="Pause simulation">${icon('pause')}</button><span class="time-divider"></span><button data-action="speed" data-speed="1" class="active" aria-label="Normal simulation speed">1×</button><button data-action="speed" data-speed="2" aria-label="Double simulation speed">2×</button><button data-action="speed" data-speed="4" aria-label="Quadruple simulation speed">4×</button><span class="time-divider"></span><span id="game-day">Day 12</span></div><div class="zoom-controls"><button class="icon-button" data-action="zoom-out" aria-label="Zoom out">${icon('minus')}</button><span id="zoom-value">72%</span><button class="icon-button" data-action="zoom-in" aria-label="Zoom in">${icon('plus')}</button><span class="time-divider"></span><button class="icon-button" data-action="recenter" aria-label="Recenter map" title="Recenter map">${icon('corners-out')}</button></div></div><div class="map-legend"><span class="legend-dot water-dot"></span>Waterways<span class="legend-dot land-dot"></span>Fertile land<span class="map-hint" id="map-hint">Drag to explore • Scroll to zoom</span></div><div class="minimap-card"><span>${icon('compass')}ANGKOR CORE <small>N ↑</small></span><canvas id="minimap" aria-label="Settlement minimap. Click a location to move the camera." title="Click to navigate"></canvas></div><div id="placement-banner" class="placement-banner" hidden></div><section class="build-tray" aria-label="Building selection"><div class="build-tray-header"><h2>${icon('hammer')}Build your legacy</h2><div class="build-tabs" role="tablist" aria-label="Building categories">${(['all', 'water', 'production', 'civic', 'infrastructure'] as Category[]).map((c) => `<button role="tab" data-action="category" data-category="${c}" aria-selected="${c === 'all'}" class="${c === 'all' ? 'active' : ''}">${c === 'all' ? 'All buildings' : c === 'water' ? 'Waterworks' : c === 'production' ? 'Production' : c === 'infrastructure' ? 'Paths & bridges' : 'Civic & sacred'}</button>`).join('')}</div><span class="build-tip">Construction uses available builders ${icon('cursor-click')}</span></div><div id="building-list" class="building-list"></div></section><div id="toast" class="toast" role="status" aria-live="polite" hidden></div></main></div></div><dialog aria-label="Game guide and settings"></dialog><input type="file" id="import-file" accept=".json,application/json" hidden />`;
+  root.innerHTML = `<div class="game-shell"><aside class="sidebar"><a href="/" class="brand" aria-label="Angkor Architect home"><span class="brand-mark">${icon('bank')}</span><span>ANGKOR<small>ARCHITECT</small></span></a><div class="sidebar-divider"></div><div class="settlement-badge"><span class="settlement-seal">R</span><div><strong>Roluos settlement</strong><span>Your growing kingdom</span></div></div><span class="nav-label">YOUR KINGDOM</span><nav aria-label="Kingdom views"><button class="nav-item active" data-action="panel" data-panel="overview">${icon('squares-four')}<span>City overview</span></button><button class="nav-item" data-action="panel" data-panel="water">${icon('waves')}<span>Water management</span><small id="lowwater-count" title="Fields with low irrigation" aria-label="fields with low water"></small></button><button class="nav-item" data-action="panel" data-panel="workforce">${icon('users-three')}<span>People & logistics</span><small id="idle-count" title="Idle workers" aria-label="idle workers"></small><small id="logistics-count" aria-label="worksites needing attention"></small></button><button class="nav-item" data-action="panel" data-panel="survival" aria-label="Food & resilience" title="Food & resilience">${icon('bowl-food')}<span>Food & resilience</span></button><button class="nav-item" data-action="panel" data-panel="construction" title="Construction projects">${icon('hammer')}<span>Construction</span><small id="projects-count">0</small></button><button class="nav-item" data-action="panel" data-panel="campaign" aria-label="Royal campaign" title="Royal campaign">${icon('flag-pennant')}<span>Royal commissions</span></button><button class="nav-item" data-action="panel" data-panel="monuments">${icon('bank')}<span>Monuments</span></button><button class="nav-item" data-action="panel" data-panel="chronicle">${icon('scroll')}<span>City chronicle</span></button></nav><div class="sidebar-bottom"><div class="era-icon">${icon('plant')}</div><span class="nav-label">AN EMPIRE IN THE MAKING</span><h3 id="era-name">The founding of Angkor</h3><p>Greatness grows where<br>the waters flow.</p><div class="season-track"><span id="season-progress"></span></div><span id="sidebar-season"></span><button class="guide-link" data-action="guide">${icon('book-open-text')}Builder’s guide ${icon('arrow-up-right')}</button><div class="sidebar-footer"><span>${icon('compass')}Made for a lasting legacy</span></div></div></aside><div class="workspace"><header class="topbar"><div class="breadcrumbs">${icon('house-line')}<span>Your kingdom</span>${icon('caret-right')}<strong>Angkor Core</strong></div><div class="topbar-actions"><span class="save-indicator">${icon('check-circle')}<span id="save-status">Local kingdom</span></span><button class="save-button" data-action="save">${icon('floppy-disk')}Save game</button><span class="topbar-divider"></span><button class="icon-button" data-action="guide" aria-label="Open builder’s guide" title="Builder’s guide (H)">${icon('question')}</button><button class="icon-button" data-action="settings" aria-label="Open settings" title="Settings">${icon('gear-six')}</button><span class="builder-avatar" title="Royal master builder">K</span></div></header><section class="resource-bar" aria-label="Kingdom resources">${(Object.keys(RESOURCE_INFO) as Resource[]).map((r) => `<div class="resource"><span class="resource-icon ${r}">${icon(RESOURCE_INFO[r].icon)}</span><div><span class="resource-label">${RESOURCE_INFO[r].name}</span><strong id="resource-${r}">0</strong><small id="rate-${r}"></small></div></div>`).join('')}<div class="resource population-resource"><span class="resource-icon people">${icon('users-three')}</span><div><span class="resource-label">Population</span><strong id="population">84</strong><small id="happiness">88% content</small></div></div></section><main class="map-area"><div id="world"><div class="world-loading"><span class="loading-temple">${icon('bank')}</span><strong>Preparing your kingdom</strong><span>The waters are finding their way.</span></div></div><div class="world-heading"><div><span class="region-label">THE KHMER EMPIRE <span id="game-date">802 CE</span></span><h1>Angkor Core</h1><p>A fertile land. An enduring legacy.</p></div><div class="weather-badge"><span id="season-icon">${icon('cloud-rain')}</span><div><strong id="season-name">Wet season</strong><small id="season-detail">The monsoon is here</small></div></div></div><div class="map-top-controls"><div class="map-view-buttons" aria-label="Map overlays"><button class="icon-button" data-action="overlay" data-overlay="water" aria-label="Toggle water overlay" aria-pressed="false" title="Water depth (W)">${icon('drop')}</button><button class="icon-button" data-action="overlay" data-overlay="logistics" aria-label="Toggle logistics overlay" aria-pressed="false" title="Delivery routes (L)">${icon('path')}</button><button class="icon-button" data-action="overlay" data-overlay="resources" aria-label="Toggle resource deposits" aria-pressed="false" title="Resource deposits (R)">${icon('mountains')}</button><button class="icon-button" data-action="overlay" data-overlay="grid" aria-label="Toggle construction grid" aria-pressed="false" title="Grid (G)">${icon('grid-four')}</button><button class="icon-button demolition-tool" data-action="demolish-mode" aria-label="Toggle demolition tool" aria-pressed="false" title="Remove structures (X)">${icon('trash')}</button></div><span id="overlay-label" hidden></span></div><aside id="inspector" class="inspector" aria-label="Kingdom information"></aside><div class="map-bottom-controls"><div class="time-controls"><button class="icon-button" data-action="pause" aria-label="Pause simulation">${icon('pause')}</button><span class="time-divider"></span><button data-action="speed" data-speed="1" class="active" aria-label="Normal simulation speed">1×</button><button data-action="speed" data-speed="2" aria-label="Double simulation speed">2×</button><button data-action="speed" data-speed="4" aria-label="Quadruple simulation speed">4×</button><span class="time-divider"></span><span id="game-day">Day 12</span></div><div class="zoom-controls"><button class="icon-button" data-action="zoom-out" aria-label="Zoom out">${icon('minus')}</button><span id="zoom-value">72%</span><button class="icon-button" data-action="zoom-in" aria-label="Zoom in">${icon('plus')}</button><span class="time-divider"></span><button class="icon-button" data-action="recenter" aria-label="Recenter map" title="Recenter map">${icon('corners-out')}</button></div></div><div class="map-legend"><span class="legend-dot water-dot"></span>Waterways<span class="legend-dot land-dot"></span>Fertile land<span class="map-hint" id="map-hint">Drag to explore • Scroll to zoom</span></div><div class="minimap-card"><span>${icon('compass')}ANGKOR CORE <small>N ↑</small></span><canvas id="minimap" aria-label="Settlement minimap. Click a location to move the camera." title="Click to navigate"></canvas></div><div id="placement-banner" class="placement-banner" hidden></div><section class="build-tray" aria-label="Building selection"><div class="build-tray-header"><h2>${icon('hammer')}Build your legacy</h2><div class="build-tabs" role="tablist" aria-label="Building categories">${(['all', 'water', 'production', 'civic', 'infrastructure'] as Category[]).map((c) => `<button role="tab" data-action="category" data-category="${c}" aria-selected="${c === 'all'}" class="${c === 'all' ? 'active' : ''}">${c === 'all' ? 'All buildings' : c === 'water' ? 'Waterworks' : c === 'production' ? 'Production' : c === 'infrastructure' ? 'Paths & bridges' : 'Civic & sacred'}</button>`).join('')}</div><span class="build-tip">Construction uses available builders ${icon('cursor-click')}</span></div><div id="building-list" class="building-list"></div></section><div id="toast" class="toast" role="status" aria-live="polite" hidden></div></main></div></div><dialog aria-label="Game guide and settings"></dialog><input type="file" id="import-file" accept=".json,application/json" hidden />`;
 }
 
 export function applyTheme() {

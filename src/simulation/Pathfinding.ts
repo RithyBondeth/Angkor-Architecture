@@ -58,7 +58,7 @@ export function traversable(
   const bridge = t.terrain === 'bridge';
   if (mode === 'barge')
     return (
-      (['water', 'canal', 'reservoir'].includes(t.terrain) || bridge) &&
+      (['water', 'moat', 'canal', 'reservoir'].includes(t.terrain) || bridge) &&
       (options.ignoreShallows || t.water >= 0.45) &&
       !(
         !options.ignoreClosedGates &&
@@ -84,6 +84,7 @@ export function traversable(
         'lateritepit',
         'warehouse',
         'road',
+        'moat',
         'canal',
       ].includes(building.kind))
   );

@@ -1,4 +1,5 @@
 import type { Building, GameState, Resource } from '../core/types';
+import { templeBlocked, templeWorkFactor } from './TempleEngineering';
 import { footprint, tileAt } from '../core/world';
 import { reconcileBuilders } from './Workforce';
 import { floodUnsafe, builderEfficiency } from './survivalRules';
@@ -11,11 +12,19 @@ export class Construction {
     for (const building of state.buildings) {
       const project = building.construction;
       if (!project || project.paused || project.builders === 0) continue;
+      if (templeBlocked(building)) continue;
       if (project.type === 'repair' && floodUnsafe(state, building)) continue;
       project.workDone = Math.min(
         project.workRequired,
-        project.workDone + project.builders * efficiency,
+        project.workDone + project.builders * efficiency * templeWorkFactor(building),
       );
+      if (
+        building.engineering &&
+        building.level === 2 &&
+        project.type === 'upgrade' &&
+        !building.engineering.reliefComplete
+      )
+        project.workDone = Math.min(project.workDone, project.workRequired * 0.8);
       if (project.workDone + 1e-8 < project.workRequired) continue;
       if (project.type !== 'repair') {
         for (const [resource, amount] of Object.entries(project.cost)) {
@@ -28,8 +37,9 @@ export class Construction {
       else {
         for (const p of footprint(building)) {
           const tile = tileAt(state, p.x, p.y)!;
-          if (building.kind === 'baray' || building.kind === 'canal') {
-            tile.terrain = building.kind === 'baray' ? 'reservoir' : 'canal';
+          if (building.kind === 'baray' || building.kind === 'canal' || building.kind === 'moat') {
+            tile.terrain =
+              building.kind === 'baray' ? 'reservoir' : building.kind === 'moat' ? 'moat' : 'canal';
             tile.elevation = building.kind === 'baray' ? -1 : -0.8;
           } else if (building.kind === 'road' || building.kind === 'bridge')
             tile.terrain = building.kind;

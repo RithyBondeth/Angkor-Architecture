@@ -24,7 +24,7 @@ export function seedDeposits(state: GameState): void {
   for (const tile of state.tiles) {
     tile.timber = tile.terrain === 'forest' ? 80 + tile.variant * 20 : 0;
     tile.mineral = null;
-    if (['water', 'canal', 'reservoir', 'bridge'].includes(tile.terrain)) continue;
+    if (['water', 'moat', 'canal', 'reservoir', 'bridge'].includes(tile.terrain)) continue;
     const cluster = clusters.find((c) => Math.abs(tile.x - c.x) + Math.abs(tile.y - c.y) <= 3);
     if (cluster)
       tile.mineral = { resource: cluster.resource, remaining: 80 + Math.floor(rand() * 81) };
@@ -39,7 +39,7 @@ export function depositTiles(state: GameState, site: Point & { kind: BuildingKin
         siteDistance(t, site) <= (wood ? 6 : 3) &&
         (wood
           ? t.terrain === 'forest' && t.timber > 0 && !buildingAt(state, t.x, t.y)
-          : !['water', 'canal', 'reservoir', 'bridge'].includes(t.terrain) &&
+          : !['water', 'moat', 'canal', 'reservoir', 'bridge'].includes(t.terrain) &&
             t.mineral?.resource === (site.kind === 'quarry' ? 'sandstone' : 'laterite') &&
             t.mineral.remaining > 0),
     )

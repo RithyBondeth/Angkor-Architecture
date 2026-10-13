@@ -6,12 +6,13 @@ import { workforce } from '../simulation/Workforce';
 import { freshSurvival } from './survivalState';
 import { freshProgression } from './progressionState';
 import { COMMISSIONS } from '../data/progression';
+import { freshEngineering, RELIEF_TARGET } from '../simulation/TempleEngineering';
 import { seedDeposits } from '../simulation/Deposits';
 import { DELIVERY_ISSUES } from './types';
 import type { Building, GameState } from './types';
 
 const resources = ['rice', 'wood', 'sandstone', 'laterite', 'merit'];
-const terrains = ['grass', 'forest', 'water', 'canal', 'reservoir', 'road', 'bridge'];
+const terrains = ['grass', 'forest', 'moat', 'water', 'canal', 'reservoir', 'road', 'bridge'];
 const finite = (n: unknown, min = 0, max = 1e8): n is number =>
   typeof n === 'number' && Number.isFinite(n) && n >= min && n <= max;
 const integer = (n: unknown, min = 0, max = 1e8): n is number =>
@@ -20,7 +21,7 @@ const record = (n: unknown): n is Record<string, unknown> =>
   typeof n === 'object' && n !== null && !Array.isArray(n);
 
 /** Validate untrusted local JSON before it can reach the simulation or DOM. */
-function validateShape(value: unknown, version: 1 | 2 | 3 | 4 | 5 = 5): boolean {
+function validateShape(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 = 6): boolean {
   if (!record(value)) return false;
   const s = value as unknown as GameState;
   if (
@@ -49,6 +50,21 @@ function validateShape(value: unknown, version: 1 | 2 | 3 | 4 | 5 = 5): boolean 
   if (
     !record(s.resources) ||
     !resources.every((k) => finite(s.resources[k as keyof typeof s.resources], 0, 99999))
+  )
+    return false;
+  if (
+    version >= 6 &&
+    (!record(s.feedback) ||
+      !integer(s.feedback.sinceTick, 0, s.tick) ||
+      !Array.isArray(s.feedback.receipts) ||
+      s.feedback.receipts.length > 2500 ||
+      !s.feedback.receipts.every(
+        (r) =>
+          record(r) &&
+          integer(r.tick, s.feedback.sinceTick, s.tick) &&
+          resources.includes(r.resource) &&
+          finite(r.amount, 0, 1e8),
+      ))
   )
     return false;
   if (version >= 5 && (!record(s.logistics) || !integer(s.logistics.dispatchCursor))) return false;
@@ -194,8 +210,23 @@ function validateBuildingMeta(
   b: Building,
   s: GameState,
   ids: Set<string>,
-  version: 2 | 3 | 4 | 5,
+  version: 2 | 3 | 4 | 5 | 6,
 ): boolean {
+  if (version >= 6) {
+    const e = b.engineering;
+    if (b.kind === 'temple') {
+      if (
+        !record(e) ||
+        !finite(e.stability, 0, 100) ||
+        !Array.isArray(e.relief) ||
+        e.relief.length !== 9 ||
+        !e.relief.every((r) => integer(r, 0, 3)) ||
+        typeof e.reliefComplete !== 'boolean' ||
+        (e.reliefComplete && !e.relief.every((r, i) => r === RELIEF_TARGET[i]))
+      )
+        return false;
+    } else if (e !== null) return false;
+  }
   if (version >= 5 && b.deliveryIssue !== null && !DELIVERY_ISSUES.includes(b.deliveryIssue))
     return false;
   if (version >= 3) {
@@ -247,7 +278,7 @@ function validateBuildingMeta(
     if (
       !['bridge', 'gate'].includes(b.kind) ||
       !record(u) ||
-      u.kind !== 'canal' ||
+      !['canal', 'moat'].includes(u.kind) ||
       u.construction !== null ||
       u.underlay !== null ||
       u.x !== b.x ||
@@ -275,13 +306,23 @@ export function readGameState(value: unknown): GameState | null {
   if (validateState(value)) return structuredClone(value);
   if (
     !record(value) ||
-    (value.version !== 1 && value.version !== 2 && value.version !== 3 && value.version !== 4) ||
+    (value.version !== 1 &&
+      value.version !== 2 &&
+      value.version !== 3 &&
+      value.version !== 4 &&
+      value.version !== 5) ||
     !validateShape(value, value.version)
   )
     return null;
   const state = structuredClone(value) as unknown as GameState;
   const legacy = value.version === 1;
-  state.version = 5;
+  state.version = 6;
+  state.feedback = { sinceTick: state.tick, receipts: [] };
+  for (const b of state.buildings) {
+    b.engineering = b.kind === 'temple' ? freshEngineering(b.level >= 3) : null;
+    if (b.underlay) b.underlay.engineering = null;
+  }
+  if (value.version === 5) return validateState(state) ? state : null;
   state.logistics = { dispatchCursor: 0 };
   seedDeposits(state);
   for (const b of state.buildings) {

@@ -1,4 +1,5 @@
 import { Application, Container, Graphics, Sprite, Text } from 'pixi.js';
+import { moatRing, templeBlocked } from '../simulation/TempleEngineering';
 import { BUILDINGS } from '../data/buildings';
 import { buildingAt, footprint, tileAt } from '../core/world';
 import type { BuildingKind, Overlay, Point } from '../core/types';
@@ -21,6 +22,7 @@ export class WorldRenderer {
   private readonly objects = new Container();
   private readonly routes = new Graphics();
   private readonly highlight = new Graphics();
+  private readonly ghost = new Sprite();
   private readonly tileSprites: Sprite[] = [];
   private readonly waterMarkers: Sprite[] = [];
   private readonly buildingSprites = new Map<string, Sprite>();
@@ -37,6 +39,7 @@ export class WorldRenderer {
   private resizeObserver!: ResizeObserver;
   private unsubscribe?: () => void;
   private readonly reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  onPreview: (message: string, ok: boolean) => void = () => {};
   onResource: (message: string) => void = () => {};
   onSelect: (id: string | null) => void = () => {};
   onPlace: (message: string, ok: boolean) => void = () => {};
@@ -63,7 +66,14 @@ export class WorldRenderer {
       'Isometric map of your Angkor settlement. Drag to pan, scroll to zoom, and click to inspect or build.',
     );
     this.app.canvas.setAttribute('role', 'img');
-    this.world.addChild(this.ground, this.routes, this.objects, this.labels, this.highlight);
+    this.world.addChild(
+      this.ground,
+      this.routes,
+      this.objects,
+      this.labels,
+      this.ghost,
+      this.highlight,
+    );
     this.objects.sortableChildren = true;
     this.app.stage.addChild(this.world);
     for (const tile of this.game.state.tiles) {
@@ -136,7 +146,7 @@ export class WorldRenderer {
             : t.terrain === 'forest' && t.timber > 0
               ? 0x7cb85c
               : 0x8e9988;
-      const channel = ['water', 'reservoir', 'canal', 'bridge'].includes(t.terrain);
+      const channel = ['water', 'reservoir', 'moat', 'canal', 'bridge'].includes(t.terrain);
       const flood = this.waterMarkers[i]!;
       flood.alpha = channel ? 0 : Math.min(0.6, t.water * 0.55);
       if (channel && t.water < 0.45) sprite.tint = 0xa7ac7b;
@@ -193,11 +203,15 @@ export class WorldRenderer {
         const p = b.construction;
         site.label.text = p.paused
           ? 'Paused'
-          : p.type === 'repair' && floodUnsafe(state, b)
-            ? 'Flooded'
-            : !p.builders
-              ? 'Queued'
-              : `${Math.floor((p.workDone / p.workRequired) * 100)}%`;
+          : templeBlocked(b)
+            ? b.engineering!.stability < 40
+              ? 'Unstable'
+              : 'Carve relief'
+            : p.type === 'repair' && floodUnsafe(state, b)
+              ? 'Flooded'
+              : !p.builders
+                ? 'Queued'
+                : `${Math.floor((p.workDone / p.workRequired) * 100)}%`;
         site.label.style.fontSize = 9;
         site.workers.forEach((worker, i) => (worker.visible = !p.paused && i < p.builders));
       }
@@ -238,8 +252,15 @@ export class WorldRenderer {
       }
       if (b.kind === 'road' && b.condition < 100)
         this.tileSprites[b.y * state.width + b.x]!.tint = 0xb19b81;
-      if (b.kind === 'canal' || b.kind === 'road') continue;
-      const artwork = b.kind === 'temple' && b.level === 1 ? 'temple-foundation' : b.kind;
+      if (b.kind === 'canal' || b.kind === 'moat' || b.kind === 'road') continue;
+      const artwork =
+        b.kind === 'temple'
+          ? b.level === 1
+            ? 'temple-foundation'
+            : b.level === 2
+              ? 'temple-towers'
+              : 'temple'
+          : b.kind;
       let sprite = this.buildingSprites.get(b.id);
       if (!sprite) {
         sprite = new Sprite(this.atlas.get(artwork));
@@ -389,6 +410,7 @@ export class WorldRenderer {
   }
   private drawHighlight() {
     this.highlight.clear();
+    this.ghost.visible = false;
     const selected = this.game.state.buildings.find((b) => b.id === this.selected);
     const origin =
       this.demolition && this.hover
@@ -397,7 +419,35 @@ export class WorldRenderer {
           ? { ...this.hover, kind: this.placement }
           : selected;
     if (!origin) return;
+    if (origin.kind === 'temple')
+      for (const c of moatRing(origin)) {
+        const t = tileAt(this.game.state, c.x, c.y);
+        if (!t) continue;
+        const p = toScreen(c.x, c.y);
+        const occupied = buildingAt(this.game.state, c.x, c.y);
+        this.highlight.poly([p.x, p.y - 18, p.x + 36, p.y, p.x, p.y + 18, p.x - 36, p.y]).stroke({
+          color:
+            occupied && !['canal', 'moat', 'bridge'].includes(occupied.kind) ? 0xcf9b6c : 0x64a9ad,
+          width: 1.5,
+          alpha: 0.8,
+        });
+      }
     const cells = footprint(origin);
+    if (this.placement && this.hover) {
+      const result = this.game.canPlace(this.placement, this.hover);
+      const size = BUILDINGS[this.placement].size;
+      this.ghost.texture = this.atlas.get(
+        this.placement === 'temple' ? 'temple-foundation' : this.placement,
+      );
+      this.ghost.anchor.set(0.5, 252 / 320);
+      this.ghost.scale.set(size === 1 && this.placement !== 'bridge' ? 0.72 : 1);
+      const center = toScreen(origin.x + (size - 1) / 2, origin.y + (size - 1) / 2);
+      this.ghost.position.set(center.x, center.y);
+      this.ghost.alpha = 0.5;
+      this.ghost.tint = result.ok ? 0xdcebc3 : 0xe6a18c;
+      this.ghost.visible = true;
+      this.onPreview(result.message, result.ok);
+    }
     const valid = this.demolition
       ? false
       : this.placement

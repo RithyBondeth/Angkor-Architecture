@@ -342,7 +342,7 @@ describe('progression saves', () => {
     legacy.objectivesClaimed = true;
     delete legacy.progression;
     const copy = readGameState(legacy)!;
-    expect(copy.version).toBe(5);
+    expect(copy.version).toBe(6);
     expect(copy.survival).toEqual(legacy.survival);
     expect(copy.buildings).toEqual(legacy.buildings);
     expect(copy.resources).toEqual(legacy.resources);
@@ -372,7 +372,7 @@ describe('progression saves', () => {
     const s = createWorld(),
       persistence = new Persistence();
     await persistence.save(s);
-    expect(JSON.parse([...values.values()][0]!).schema).toBe(5);
+    expect(JSON.parse([...values.values()][0]!).schema).toBe(6);
     expect(await persistence.load()).toEqual(s);
   });
   it('rejects out-of-order or duplicate claims, unknown cargo, and invalid counters', () => {

@@ -49,7 +49,7 @@ export function createWorld(seed = 802): GameState {
   const rand = random(seed);
   const size = CONFIG.worldSize;
   const state: GameState = {
-    version: 5,
+    version: 6,
     seed,
     width: size,
     height: size,
@@ -67,6 +67,7 @@ export function createWorld(seed = 802): GameState {
     built: {},
     progression: freshProgression(48),
     logistics: { dispatchCursor: 0 },
+    feedback: { sinceTick: 0, receipts: [] },
     chronicle: [
       {
         tick: 0,

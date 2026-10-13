@@ -1,4 +1,11 @@
 import { BUILDINGS } from '../data/buildings';
+import {
+  freshEngineering,
+  moatRing,
+  RELIEF_TARGET,
+  TempleEngineeringSimulation,
+} from '../simulation/TempleEngineering';
+import { siteDistance } from '../simulation/Deposits';
 import { CONFIG } from '../data/config';
 import { WaterSimulation } from '../simulation/WaterSimulation';
 import { remainingDeposit } from '../simulation/Deposits';
@@ -25,6 +32,7 @@ import type {
 
 export class Game {
   private readonly water = new WaterSimulation();
+  private readonly engineering = new TempleEngineeringSimulation();
   private readonly logistics = new Logistics();
   private readonly construction = new Construction();
   private readonly survival = new Survival();
@@ -43,6 +51,7 @@ export class Game {
     this.state.tick++;
     if (this.state.tick % CONFIG.ticksPerDay === 0) this.state.day++;
     this.water.step(this.state);
+    this.engineering.step(this.state);
     for (const e of this.survival.environment(this.state)) this.log(e.title, e.text, e.icon);
     for (const b of this.construction.step(this.state))
       this.log(
@@ -84,33 +93,53 @@ export class Game {
     if (
       cells.some((c) => {
         const b = buildingAt(this.state, c.x, c.y);
-        return b && !(['gate', 'bridge'].includes(kind) && b.kind === 'canal' && !b.construction);
+        return (
+          b &&
+          !(
+            ['gate', 'bridge'].includes(kind) &&
+            ['canal', 'moat'].includes(b.kind) &&
+            !b.construction
+          )
+        );
       })
     )
       return { ok: false, message: 'There is already a building or project on this site.' };
     const tile = tileAt(this.state, p.x, p.y)!;
+    if (
+      kind === 'moat' &&
+      !this.state.buildings.some((b) => b.kind === 'temple' && siteDistance(p, b) <= 2)
+    )
+      return { ok: false, message: 'Excavate a moat within two tiles of a temple.' };
     if (kind === 'gate') {
-      if (tile.terrain !== 'canal')
-        return { ok: false, message: 'Floodgates must be placed on a completed canal.' };
+      if (!['canal', 'moat'].includes(tile.terrain))
+        return { ok: false, message: 'Floodgates must be placed on a completed canal or moat.' };
     } else if (kind === 'bridge') {
-      if (!['water', 'canal'].includes(tile.terrain))
+      if (!['water', 'canal', 'moat'].includes(tile.terrain))
         return {
           ok: false,
-          message: 'Place a timber bridge over a river or completed canal tile.',
+          message: 'Place a timber bridge over a river, completed canal, or moat tile.',
         };
     } else if (
       cells.some((c) =>
-        ['water', 'reservoir', 'canal', 'road', 'bridge'].includes(
+        ['water', 'reservoir', 'canal', 'moat', 'road', 'bridge'].includes(
           tileAt(this.state, c.x, c.y)!.terrain,
         ),
       )
     )
       return { ok: false, message: 'Choose clear land away from waterways and roads.' };
     if (
-      !['canal', 'baray', 'gate', 'bridge'].includes(kind) &&
+      !['canal', 'moat', 'baray', 'gate', 'bridge'].includes(kind) &&
       cells.some((c) => tileAt(this.state, c.x, c.y)!.water > 0.8)
     )
       return { ok: false, message: 'This land is flooded. Choose a drier site.' };
+    if (kind === 'temple') {
+      const heights = cells.map((c) => tileAt(this.state, c.x, c.y)!.elevation);
+      if (Math.max(...heights) - Math.min(...heights) > 0.5)
+        return {
+          ok: false,
+          message: 'The temple foundation needs level ground (at most 0.5 elevation difference).',
+        };
+    }
     if (
       kind === 'dock' &&
       !cells.some((c) =>
@@ -171,6 +200,7 @@ export class Game {
       enabled: true,
       stock: 0,
       deliveryIssue: null,
+      engineering: kind === 'temple' ? freshEngineering() : null,
       condition: 100,
       crop: kind === 'paddy' ? { stress: 0, failed: false } : null,
       construction: this.project('build', def.cost, def.buildWork, def.builders),
@@ -259,6 +289,12 @@ export class Game {
       return { ok: false, message: 'Finish the current project before starting another stage.' };
     if (b.condition < 100)
       return { ok: false, message: 'Repair flood damage before upgrading the sanctuary.' };
+    if (b.engineering && b.engineering.stability < 60)
+      return {
+        ok: false,
+        message:
+          'Foundation stability must reach 60%. Fill the surrounding moat and drain the temple footprint.',
+      };
     if (earnedMerit(this.state) < templeUpgradeMerit(b.level))
       return {
         ok: false,
@@ -292,6 +328,56 @@ export class Game {
     );
     this.notify();
     return { ok: true, message: 'Temple construction started. Assign builders at the sanctuary.' };
+  }
+  excavateMoat(id: string): PlacementResult {
+    const temple = this.state.buildings.find((b) => b.id === id && b.kind === 'temple');
+    if (!temple) return { ok: false, message: 'Select a temple first.' };
+    const cells = moatRing(temple).filter((p) => {
+      const t = tileAt(this.state, p.x, p.y);
+      return t && ['grass', 'forest'].includes(t.terrain) && !buildingAt(this.state, p.x, p.y);
+    });
+    if (!cells.length)
+      return {
+        ok: false,
+        message: 'The moat ring has no clear tiles left. Keep existing roads as causeways.',
+      };
+    const cost = BUILDINGS.moat.cost;
+    for (const [r, n] of Object.entries(cost))
+      if (this.state.resources[r as Resource] < n * cells.length)
+        return {
+          ok: false,
+          message: `The ${cells.length}-tile moat needs ${cells.length * n} ${r}. No materials were spent.`,
+        };
+    for (const p of cells) this.place('moat', p);
+    return {
+      ok: true,
+      message: `${cells.length} moat excavation projects planned. Connect them to stored water; four causeways stay dry.`,
+    };
+  }
+  rotateRelief(id: string, cell: number): PlacementResult {
+    const b = this.state.buildings.find((b) => b.id === id);
+    const e = b?.engineering;
+    if (!b || !e || b.level !== 2 || b.construction?.type !== 'upgrade')
+      return { ok: false, message: 'Start the sculpted relief stage before carving.' };
+    if (!Number.isInteger(cell) || cell < 0 || cell >= 9 || e.reliefComplete)
+      return { ok: false, message: 'This carving cannot be changed.' };
+    e.relief[cell] = (e.relief[cell]! + 1) % 4;
+    if (e.relief.every((r, i) => r === RELIEF_TARGET[i])) {
+      e.reliefComplete = true;
+      this.state.resources.merit = Math.min(CONFIG.maxResource, this.state.resources.merit + 40);
+      this.log(
+        'The bas-relief is complete',
+        'The artisan pattern is restored. Builders can finish the sanctuary; 40 merit awarded.',
+        'sparkle',
+      );
+    }
+    this.notify();
+    return {
+      ok: true,
+      message: e.reliefComplete
+        ? 'Bas-relief complete · 40 merit earned. Builders can finish this stage.'
+        : 'Stone panel rotated.',
+    };
   }
   refundFor(id: string, cancelOnly = false): Partial<Resources> {
     const b = this.state.buildings.find((b) => b.id === id);
