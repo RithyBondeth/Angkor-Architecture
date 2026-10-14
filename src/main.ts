@@ -2,6 +2,8 @@ import '@fontsource/dm-sans/400.css';
 import '@fontsource/dm-sans/500.css';
 import '@fontsource/dm-sans/600.css';
 import '@fontsource/dm-sans/700.css';
+import '@fontsource/fredoka/500.css';
+import '@fontsource/fredoka/600.css';
 import '@fontsource/cormorant-garamond/500.css';
 import '@fontsource/cormorant-garamond/600.css';
 import '@phosphor-icons/web/regular/style.css';
@@ -13,13 +15,15 @@ import { createWorld } from './core/world';
 import { CONFIG } from './data/config';
 import { WorldRenderer } from './rendering/WorldRenderer';
 import { applyTheme, createShell, HUD } from './ui/HUD';
+import { showWelcome } from './ui/Welcome';
+import './ui/strategy.css';
 
 async function main() {
   applyTheme();
   const root = document.querySelector<HTMLElement>('#app')!;
-  createShell(root);
   const persistence = new Persistence();
-  const saved = await persistence.load();
+  const saved = await showWelcome(root, persistence.load());
+  createShell(root);
   const game = new Game(saved ?? createWorld());
   const renderer = new WorldRenderer(game, document.querySelector<HTMLElement>('#world')!);
   await renderer.init();
