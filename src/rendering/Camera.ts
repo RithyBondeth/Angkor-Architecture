@@ -88,9 +88,11 @@ export class Camera {
   reset() {
     const width = this.surface.clientWidth;
     const height = this.surface.clientHeight;
-    this.zoom = Math.max(0.42, Math.min(0.88, width / 1470));
+    this.zoom = Math.max(0.48, Math.min(1.05, width / 1260));
     this.world.scale.set(this.zoom);
-    this.world.position.set(width * 0.44, (height - 190) * 0.5 - 540 * this.zoom);
+    const focusX = width > 900 ? (width - 270) * 0.5 : width * 0.5;
+    const focusY = (height - 80) * 0.5;
+    this.world.position.set(focusX, focusY - 540 * this.zoom);
     this.onZoom(this.zoom);
   }
   setZoom(zoom: number, x = this.surface.clientWidth * 0.45, y = this.surface.clientHeight * 0.45) {

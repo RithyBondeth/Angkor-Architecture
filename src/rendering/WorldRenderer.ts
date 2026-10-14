@@ -22,6 +22,7 @@ export class WorldRenderer {
   private readonly objects = new Container();
   private readonly routes = new Graphics();
   private readonly highlight = new Graphics();
+  private readonly ambience = new Graphics();
   private readonly ghost = new Sprite();
   private readonly tileSprites: Sprite[] = [];
   private readonly waterMarkers: Sprite[] = [];
@@ -51,6 +52,7 @@ export class WorldRenderer {
     private readonly host: HTMLElement,
   ) {}
   async init() {
+    await this.atlas.loadIllustrations();
     await this.app.init({
       resizeTo: this.host,
       backgroundAlpha: 0,
@@ -75,7 +77,7 @@ export class WorldRenderer {
       this.highlight,
     );
     this.objects.sortableChildren = true;
-    this.app.stage.addChild(this.world);
+    this.app.stage.addChild(this.world, this.ambience);
     for (const tile of this.game.state.tiles) {
       const pos = toScreen(tile.x, tile.y);
       const sprite = new Sprite(this.atlas.get(`${tile.terrain}-${tile.variant}`));
@@ -90,8 +92,8 @@ export class WorldRenderer {
       this.ground.addChild(water);
       this.waterMarkers.push(water);
     }
-    this.addLabel('ROYAL BARAY', 8.5, 8.5, -46);
-    this.addLabel('PRASAT SANCTUARY', 17.5, 14.5, -200);
+    this.addLabel('ROYAL BARAY', 8.5, 8.5, 76);
+    this.addLabel('PRASAT SANCTUARY', 17.5, 14.5, 112);
     this.addLabel('TONLÉ SAP', 28, 20, 0);
     this.camera = new Camera(
       this.world,
@@ -114,12 +116,12 @@ export class WorldRenderer {
     const label = new Text({
       text,
       style: {
-        fontFamily: 'DM Sans',
+        fontFamily: 'Fredoka',
         fontSize: 11,
         fontWeight: '600',
-        letterSpacing: 3,
-        fill: '#425c45',
-        dropShadow: { color: '#eef0d9', alpha: 0.75, blur: 3, distance: 0 },
+        letterSpacing: 1.5,
+        fill: '#fff5d5',
+        dropShadow: { color: '#466b3e', alpha: 0.8, blur: 1, distance: 2 },
       },
     });
     label.anchor.set(0.5);
@@ -224,7 +226,7 @@ export class WorldRenderer {
           label = new Text({
             text: '',
             style: {
-              fontFamily: 'DM Sans',
+              fontFamily: 'Fredoka',
               fontSize: 10,
               fontWeight: '600',
               fill: 0xfff2df,
@@ -317,6 +319,18 @@ export class WorldRenderer {
     this.drawHighlight();
   }
   render(interpolation: number, elapsed: number) {
+    this.ambience.clear();
+    if (!this.reducedMotion) {
+      const width = this.host.clientWidth;
+      const height = this.host.clientHeight;
+      for (let i = 0; i < 22; i++) {
+        const x = (i * 137.7 + Math.sin(elapsed * 0.00012 + i) * 28 + width) % width;
+        const y = (i * 79.3 - elapsed * (0.002 + (i % 3) * 0.001) + height * 100) % height;
+        this.ambience
+          .circle(x, y, i % 3 === 0 ? 1.8 : 1)
+          .fill({ color: 0xe8d6a3, alpha: 0.12 + Math.sin(elapsed * 0.0006 + i) * 0.07 });
+      }
+    }
     for (const c of this.game.state.couriers) {
       const sprite = this.courierSprites.get(c.id);
       if (!sprite) continue;
