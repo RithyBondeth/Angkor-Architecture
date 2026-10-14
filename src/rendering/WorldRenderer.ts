@@ -1,7 +1,10 @@
 import { Application, Container, Graphics, Sprite, Text } from 'pixi.js';
+import { moatRing, templeBlocked } from '../simulation/TempleEngineering';
 import { BUILDINGS } from '../data/buildings';
 import { buildingAt, footprint, tileAt } from '../core/world';
 import type { BuildingKind, Overlay, Point } from '../core/types';
+import { resourceDescription } from '../simulation/Deposits';
+import { ISSUE_TEXT } from '../simulation/logisticsRules';
 import { movementRate } from '../simulation/Pathfinding';
 import { constructionSite } from './ConstructionSite';
 import { floodUnsafe } from '../simulation/survivalRules';
@@ -19,6 +22,8 @@ export class WorldRenderer {
   private readonly objects = new Container();
   private readonly routes = new Graphics();
   private readonly highlight = new Graphics();
+  private readonly ambience = new Graphics();
+  private readonly ghost = new Sprite();
   private readonly tileSprites: Sprite[] = [];
   private readonly waterMarkers: Sprite[] = [];
   private readonly buildingSprites = new Map<string, Sprite>();
@@ -35,6 +40,8 @@ export class WorldRenderer {
   private resizeObserver!: ResizeObserver;
   private unsubscribe?: () => void;
   private readonly reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  onPreview: (message: string, ok: boolean) => void = () => {};
+  onResource: (message: string) => void = () => {};
   onSelect: (id: string | null) => void = () => {};
   onPlace: (message: string, ok: boolean) => void = () => {};
   onHover: (message: string) => void = () => {};
@@ -45,6 +52,7 @@ export class WorldRenderer {
     private readonly host: HTMLElement,
   ) {}
   async init() {
+    await this.atlas.loadIllustrations();
     await this.app.init({
       resizeTo: this.host,
       backgroundAlpha: 0,
@@ -60,9 +68,16 @@ export class WorldRenderer {
       'Isometric map of your Angkor settlement. Drag to pan, scroll to zoom, and click to inspect or build.',
     );
     this.app.canvas.setAttribute('role', 'img');
-    this.world.addChild(this.ground, this.routes, this.objects, this.labels, this.highlight);
+    this.world.addChild(
+      this.ground,
+      this.routes,
+      this.objects,
+      this.labels,
+      this.ghost,
+      this.highlight,
+    );
     this.objects.sortableChildren = true;
-    this.app.stage.addChild(this.world);
+    this.app.stage.addChild(this.world, this.ambience);
     for (const tile of this.game.state.tiles) {
       const pos = toScreen(tile.x, tile.y);
       const sprite = new Sprite(this.atlas.get(`${tile.terrain}-${tile.variant}`));
@@ -77,8 +92,8 @@ export class WorldRenderer {
       this.ground.addChild(water);
       this.waterMarkers.push(water);
     }
-    this.addLabel('ROYAL BARAY', 8.5, 8.5, -46);
-    this.addLabel('PRASAT SANCTUARY', 17.5, 14.5, -200);
+    this.addLabel('ROYAL BARAY', 8.5, 8.5, 76);
+    this.addLabel('PRASAT SANCTUARY', 17.5, 14.5, 112);
     this.addLabel('TONLÉ SAP', 28, 20, 0);
     this.camera = new Camera(
       this.world,
@@ -101,12 +116,12 @@ export class WorldRenderer {
     const label = new Text({
       text,
       style: {
-        fontFamily: 'DM Sans',
+        fontFamily: 'Fredoka',
         fontSize: 11,
         fontWeight: '600',
-        letterSpacing: 3,
-        fill: '#425c45',
-        dropShadow: { color: '#eef0d9', alpha: 0.75, blur: 3, distance: 0 },
+        letterSpacing: 1.5,
+        fill: '#fff5d5',
+        dropShadow: { color: '#466b3e', alpha: 0.8, blur: 1, distance: 2 },
       },
     });
     label.anchor.set(0.5);
@@ -124,7 +139,16 @@ export class WorldRenderer {
         sprite.label = key;
       }
       sprite.tint = this.overlay === 'water' ? (t.water > 0.45 ? 0x8fc8d4 : 0xa3ab81) : 0xffffff;
-      const channel = ['water', 'reservoir', 'canal', 'bridge'].includes(t.terrain);
+      if (this.overlay === 'resources')
+        sprite.tint =
+          t.mineral && t.mineral.remaining > 0
+            ? t.mineral.resource === 'sandstone'
+              ? 0xffe1a3
+              : 0xed8b61
+            : t.terrain === 'forest' && t.timber > 0
+              ? 0x7cb85c
+              : 0x8e9988;
+      const channel = ['water', 'reservoir', 'moat', 'canal', 'bridge'].includes(t.terrain);
       const flood = this.waterMarkers[i]!;
       flood.alpha = channel ? 0 : Math.min(0.6, t.water * 0.55);
       if (channel && t.water < 0.45) sprite.tint = 0xa7ac7b;
@@ -158,7 +182,9 @@ export class WorldRenderer {
       if (
         !state.buildings.some(
           (b) =>
-            b.id === id && !b.construction && (b.condition < 100 || (b.crop?.stress ?? 0) >= 30),
+            b.id === id &&
+            !b.construction &&
+            (b.condition < 100 || (b.crop?.stress ?? 0) >= 30 || !!b.deliveryIssue),
         )
       ) {
         label.destroy();
@@ -179,21 +205,28 @@ export class WorldRenderer {
         const p = b.construction;
         site.label.text = p.paused
           ? 'Paused'
-          : p.type === 'repair' && floodUnsafe(state, b)
-            ? 'Flooded'
-            : !p.builders
-              ? 'Queued'
-              : `${Math.floor((p.workDone / p.workRequired) * 100)}%`;
+          : templeBlocked(b)
+            ? b.engineering!.stability < 40
+              ? 'Unstable'
+              : 'Carve relief'
+            : p.type === 'repair' && floodUnsafe(state, b)
+              ? 'Flooded'
+              : !p.builders
+                ? 'Queued'
+                : `${Math.floor((p.workDone / p.workRequired) * 100)}%`;
         site.label.style.fontSize = 9;
         site.workers.forEach((worker, i) => (worker.visible = !p.paused && i < p.builders));
       }
-      if (!b.construction && (b.condition < 100 || (b.crop?.stress ?? 0) >= 30)) {
+      if (
+        !b.construction &&
+        (b.condition < 100 || (b.crop?.stress ?? 0) >= 30 || !!b.deliveryIssue)
+      ) {
         let label = this.riskLabels.get(b.id);
         if (!label) {
           label = new Text({
             text: '',
             style: {
-              fontFamily: 'DM Sans',
+              fontFamily: 'Fredoka',
               fontSize: 10,
               fontWeight: '600',
               fill: 0xfff2df,
@@ -213,12 +246,23 @@ export class WorldRenderer {
               ? 'Crop failed'
               : b.condition < 100
                 ? `${Math.round(b.condition)}% condition`
-                : 'Drought stress';
+                : (b.crop?.stress ?? 0) >= 30
+                  ? 'Drought stress'
+                  : b.deliveryIssue
+                    ? ISSUE_TEXT[b.deliveryIssue].title
+                    : '';
       }
       if (b.kind === 'road' && b.condition < 100)
         this.tileSprites[b.y * state.width + b.x]!.tint = 0xb19b81;
-      if (b.kind === 'canal' || b.kind === 'road') continue;
-      const artwork = b.kind === 'temple' && b.level === 1 ? 'temple-foundation' : b.kind;
+      if (b.kind === 'canal' || b.kind === 'moat' || b.kind === 'road') continue;
+      const artwork =
+        b.kind === 'temple'
+          ? b.level === 1
+            ? 'temple-foundation'
+            : b.level === 2
+              ? 'temple-towers'
+              : 'temple'
+          : b.kind;
       let sprite = this.buildingSprites.get(b.id);
       if (!sprite) {
         sprite = new Sprite(this.atlas.get(artwork));
@@ -275,6 +319,18 @@ export class WorldRenderer {
     this.drawHighlight();
   }
   render(interpolation: number, elapsed: number) {
+    this.ambience.clear();
+    if (!this.reducedMotion) {
+      const width = this.host.clientWidth;
+      const height = this.host.clientHeight;
+      for (let i = 0; i < 22; i++) {
+        const x = (i * 137.7 + Math.sin(elapsed * 0.00012 + i) * 28 + width) % width;
+        const y = (i * 79.3 - elapsed * (0.002 + (i % 3) * 0.001) + height * 100) % height;
+        this.ambience
+          .circle(x, y, i % 3 === 0 ? 1.8 : 1)
+          .fill({ color: 0xe8d6a3, alpha: 0.12 + Math.sin(elapsed * 0.0006 + i) * 0.07 });
+      }
+    }
     for (const c of this.game.state.couriers) {
       const sprite = this.courierSprites.get(c.id);
       if (!sprite) continue;
@@ -335,6 +391,10 @@ export class WorldRenderer {
       const b = buildingAt(this.game.state, p.x, p.y);
       this.select(b?.id ?? null);
       this.onSelect(b?.id ?? null);
+      if (this.overlay === 'resources') {
+        const t = tileAt(this.game.state, p.x, p.y);
+        if (t) this.onResource(resourceDescription(t));
+      }
     }
   }
   private move(x: number, y: number) {
@@ -352,11 +412,19 @@ export class WorldRenderer {
     } else if (this.placement) this.onHover(this.game.canPlace(this.placement, p).message);
     else {
       const b = buildingAt(this.game.state, p.x, p.y);
-      this.onHover(b ? BUILDINGS[b.kind].name : 'Drag to explore • Scroll to zoom');
+      const t = tileAt(this.game.state, p.x, p.y);
+      this.onHover(
+        this.overlay === 'resources' && t
+          ? resourceDescription(t)
+          : b
+            ? BUILDINGS[b.kind].name
+            : 'Drag to explore • Scroll to zoom',
+      );
     }
   }
   private drawHighlight() {
     this.highlight.clear();
+    this.ghost.visible = false;
     const selected = this.game.state.buildings.find((b) => b.id === this.selected);
     const origin =
       this.demolition && this.hover
@@ -365,7 +433,35 @@ export class WorldRenderer {
           ? { ...this.hover, kind: this.placement }
           : selected;
     if (!origin) return;
+    if (origin.kind === 'temple')
+      for (const c of moatRing(origin)) {
+        const t = tileAt(this.game.state, c.x, c.y);
+        if (!t) continue;
+        const p = toScreen(c.x, c.y);
+        const occupied = buildingAt(this.game.state, c.x, c.y);
+        this.highlight.poly([p.x, p.y - 18, p.x + 36, p.y, p.x, p.y + 18, p.x - 36, p.y]).stroke({
+          color:
+            occupied && !['canal', 'moat', 'bridge'].includes(occupied.kind) ? 0xcf9b6c : 0x64a9ad,
+          width: 1.5,
+          alpha: 0.8,
+        });
+      }
     const cells = footprint(origin);
+    if (this.placement && this.hover) {
+      const result = this.game.canPlace(this.placement, this.hover);
+      const size = BUILDINGS[this.placement].size;
+      this.ghost.texture = this.atlas.get(
+        this.placement === 'temple' ? 'temple-foundation' : this.placement,
+      );
+      this.ghost.anchor.set(0.5, 252 / 320);
+      this.ghost.scale.set(size === 1 && this.placement !== 'bridge' ? 0.72 : 1);
+      const center = toScreen(origin.x + (size - 1) / 2, origin.y + (size - 1) / 2);
+      this.ghost.position.set(center.x, center.y);
+      this.ghost.alpha = 0.5;
+      this.ghost.tint = result.ok ? 0xdcebc3 : 0xe6a18c;
+      this.ghost.visible = true;
+      this.onPreview(result.message, result.ok);
+    }
     const valid = this.demolition
       ? false
       : this.placement
@@ -382,6 +478,15 @@ export class WorldRenderer {
   }
   private drawRoutes() {
     this.routes.clear();
+    if (this.overlay === 'resources')
+      for (const t of this.game.state.tiles) {
+        if (!t.mineral || t.mineral.remaining <= 0) continue;
+        const p = toScreen(t.x, t.y);
+        this.routes
+          .circle(p.x, p.y, 6)
+          .fill({ color: t.mineral.resource === 'sandstone' ? 0xffe1a3 : 0xcd6340, alpha: 0.95 })
+          .stroke({ color: 0x594a35, width: 1.5 });
+      }
     if (this.overlay === 'grid')
       for (const t of this.game.state.tiles) {
         const p = toScreen(t.x, t.y);

@@ -215,11 +215,13 @@ describe('food, productivity, and population', () => {
   it('uses food delivered on the meal tick before measuring a shortage', () => {
     const s = world(),
       paddy = add(s, 'paddy');
+    const destination = add(s, 'house', 1, 1);
     s.tick = 5;
     s.resources.rice = 0;
     s.couriers.push({
       id: `c${s.nextId++}`,
       sourceId: paddy.id,
+      targetId: destination.id,
       kind: 'worker',
       path: [
         { x: 1, y: 1 },
@@ -270,6 +272,7 @@ describe('food, productivity, and population', () => {
     const c = {
       id: 'c999',
       sourceId: temple.id,
+      targetId: temple.id,
       kind: 'worker' as const,
       progress: 0,
       path: [
@@ -368,7 +371,7 @@ describe('survival persistence', () => {
       }
     }
     const state = readGameState(legacy)!;
-    expect(state.version).toBe(4);
+    expect(state.version).toBe(6);
     expect(state.survival.hunger).toBe(0);
     expect(state.buildings.find((b) => b.construction)!.construction!.workDone).toBe(2);
     expect(state.buildings.find((b) => b.underlay)!.underlay!.condition).toBe(100);

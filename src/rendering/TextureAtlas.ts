@@ -57,6 +57,46 @@ function box(
     ],
     top,
   );
+  // One consistent sunlight direction gives the procedural architecture more depth.
+  c.save();
+  c.beginPath();
+  c.moveTo(x - w, y - h);
+  c.lineTo(x, y + d - h);
+  c.lineTo(x, y + d);
+  c.lineTo(x - w, y);
+  c.closePath();
+  c.clip();
+  const sunlight = c.createLinearGradient(x - w, y - h, x, y + d);
+  sunlight.addColorStop(0, '#ffe3a42b');
+  sunlight.addColorStop(1, '#283b2b12');
+  c.fillStyle = sunlight;
+  c.fillRect(x - w, y - h, w, d + h);
+  if (w > 45) {
+    for (let row = 5; row < h; row += 6) {
+      line(
+        c,
+        [
+          [x - w, y - h + row],
+          [x, y + d - h + row],
+        ],
+        '#6e62482b',
+        0.7,
+      );
+      for (let col = row % 12 ? 8 : 0; col < w; col += 15) {
+        const yy = y - h + row + (col / w) * d;
+        line(
+          c,
+          [
+            [x - w + col, yy],
+            [x - w + col, yy - 5],
+          ],
+          '#6e624826',
+          0.7,
+        );
+      }
+    }
+  }
+  c.restore();
 }
 function ellipse(c: Ctx, x: number, y: number, rx: number, ry: number, fill: string) {
   c.beginPath();
@@ -75,8 +115,8 @@ function tower(c: Ctx, x: number, y: number, scale = 1) {
   c.save();
   c.translate(x, y);
   c.scale(scale, scale);
-  box(c, 0, 0, 25, 12, 12, '#e7d8b2', '#b5a180', '#9a896d');
-  box(c, 0, -12, 21, 10, 25, '#d3bd92', '#d2be96', '#a49373');
+  box(c, 0, 0, 25, 12, 12, '#ffdf9d', '#d5ac71', '#b78b5d');
+  box(c, 0, -12, 21, 10, 25, '#f4cf8c', '#f1cb89', '#cfa16c');
   c.fillStyle = '#645f4d';
   c.fillRect(-5, -32, 10, 20);
   line(
@@ -114,7 +154,7 @@ function tower(c: Ctx, x: number, y: number, scale = 1) {
     [21, -44],
     [23, -36],
   ];
-  polygon(c, outline, '#dcc8a1', '#9a8a6e');
+  polygon(c, outline, '#f4d294', '#b58e60');
   polygon(
     c,
     [
@@ -131,7 +171,7 @@ function tower(c: Ctx, x: number, y: number, scale = 1) {
       [23, -36],
       [0, -36],
     ],
-    '#b8a27b',
+    '#d9af76',
   );
   for (let i = 0; i < 7; i++) {
     const yy = -43 - i * 9;
@@ -143,7 +183,7 @@ function tower(c: Ctx, x: number, y: number, scale = 1) {
         [0, yy + 4],
         [w, yy],
       ],
-      '#f0dcaf',
+      '#ffe9ac',
       2,
     );
     line(
@@ -163,12 +203,12 @@ function tower(c: Ctx, x: number, y: number, scale = 1) {
       [0, -112],
       [0, -39],
     ],
-    '#ead7ad',
+    '#ffe8ad',
     1.4,
   );
   c.restore();
 }
-function dwelling(c: Ctx, x: number, y: number, scale = 1, roof = '#9b6541') {
+function dwelling(c: Ctx, x: number, y: number, scale = 1, roof = '#cd784f') {
   c.save();
   c.translate(x, y);
   c.scale(scale, scale);
@@ -214,7 +254,7 @@ function dwelling(c: Ctx, x: number, y: number, scale = 1, roof = '#9b6541') {
       [36, -23],
       [39, -29],
     ],
-    '#744d35',
+    '#a65840',
   );
   polygon(
     c,
@@ -223,7 +263,7 @@ function dwelling(c: Ctx, x: number, y: number, scale = 1, roof = '#9b6541') {
       [-5, -62],
       [-9, -35],
     ],
-    '#b37e4e',
+    '#e6a16a',
   );
   line(
     c,
@@ -231,7 +271,7 @@ function dwelling(c: Ctx, x: number, y: number, scale = 1, roof = '#9b6541') {
       [-5, -62],
       [34, -43],
     ],
-    '#d7b57c',
+    '#ffcd8a',
     2,
   );
   for (let i = 0; i < 7; i++)
@@ -241,7 +281,7 @@ function dwelling(c: Ctx, x: number, y: number, scale = 1, roof = '#9b6541') {
         [-30 + i * 5, -36 - i * 3.4],
         [7 + i * 4.1, -21 - i * 3.2],
       ],
-      '#d2a573',
+      '#f6be80',
       0.7,
     );
   polygon(
@@ -297,6 +337,7 @@ export class TextureAtlas {
       'forest',
       'water',
       'canal',
+      'moat',
       'reservoir',
       'road',
       'bridge',
@@ -307,6 +348,7 @@ export class TextureAtlas {
     for (const kind of [
       'baray',
       'canal',
+      'moat',
       'paddy',
       'house',
       'quarry',
@@ -318,8 +360,11 @@ export class TextureAtlas {
       'bridge',
       'granary',
       'workshop',
+      'warehouse',
+      'lateritepit',
     ] as BuildingKind[])
       this.add(kind, 384, 320, (c) => this.building(c, kind));
+    this.add('temple-towers', 384, 320, (c) => this.building(c, 'temple', 2));
     this.add('temple-foundation', 384, 320, (c) => this.building(c, 'temple', 1));
     this.add('worker', 32, 48, (c) => {
       ellipse(c, 16, 42, 7, 3, '#3f4a3540');
@@ -412,6 +457,38 @@ export class TextureAtlas {
     this.textures.set(key, texture);
     return texture;
   }
+  async loadIllustrations() {
+    const image = new Image();
+    image.src = '/art/temple-cartoon.png';
+    try {
+      await image.decode();
+    } catch {
+      // Procedural architecture remains available if the illustration cannot load.
+      return;
+    }
+    const scale = Math.min(304 / image.width, 264 / image.height);
+    const width = image.width * scale;
+    const height = image.height * scale;
+    for (const key of ['temple', 'temple-towers']) {
+      const frame = this.frames.get(key)!;
+      this.context.clearRect(frame.x, frame.y, frame.width, frame.height);
+      this.context.drawImage(
+        image,
+        frame.x + (frame.width - width) / 2,
+        frame.y + 54,
+        width,
+        height,
+      );
+      const thumbnail = document.createElement('canvas');
+      thumbnail.width = 192;
+      thumbnail.height = 160;
+      thumbnail
+        .getContext('2d')!
+        .drawImage(this.canvas, frame.x, frame.y, frame.width, frame.height, 0, 0, 192, 160);
+      this.thumbnails.set(key, thumbnail.toDataURL('image/png'));
+    }
+    this.texture.source.update();
+  }
   thumbnail(key: string) {
     return this.thumbnails.get(key) ?? '';
   }
@@ -446,15 +523,15 @@ export class TextureAtlas {
   }
   private tile(c: Ctx, terrain: Terrain, variant: number) {
     const rand = random(variant + 41);
-    const grass = ['#b2c58d', '#b6c78f', '#b1c28b', '#bacb95', '#b4c58d'][variant]!;
-    const water = ['#71a99b', '#77ad9e', '#74aa9c', '#7caf9e', '#73a797'][variant]!;
-    const wet = ['water', 'canal', 'reservoir', 'bridge'].includes(terrain);
+    const grass = ['#a1c978', '#a5ce7a', '#9bc572', '#a9d17c', '#a0cb75'][variant]!;
+    const water = ['#48abb5', '#50b1ba', '#4caeb8', '#55b7bf', '#4aafb6'][variant]!;
+    const wet = ['water', 'moat', 'canal', 'reservoir', 'bridge'].includes(terrain);
     const top = wet
       ? water
       : terrain === 'road'
-        ? '#c5b995'
+        ? '#e3c18a'
         : terrain === 'forest'
-          ? '#9eb77d'
+          ? '#88b562'
           : grass;
     polygon(
       c,
@@ -464,7 +541,7 @@ export class TextureAtlas {
         [40, 43],
         [4, 25],
       ],
-      wet ? '#5f9484' : '#859367',
+      wet ? '#378b97' : '#7b9f55',
     );
     polygon(
       c,
@@ -474,7 +551,7 @@ export class TextureAtlas {
         [76, 25],
         [40, 43],
       ],
-      wet ? '#548b7b' : '#79865e',
+      wet ? '#2f8192' : '#688e4c',
     );
     polygon(
       c,
@@ -485,8 +562,26 @@ export class TextureAtlas {
         [4, 18],
       ],
       top,
-      wet ? '#80b7a4' : '#afc18a',
+      undefined,
     );
+    c.save();
+    c.beginPath();
+    c.moveTo(40, 0);
+    c.lineTo(76, 18);
+    c.lineTo(40, 36);
+    c.lineTo(4, 18);
+    c.closePath();
+    c.clip();
+    const light = c.createLinearGradient(8, 0, 65, 36);
+    light.addColorStop(0, wet ? '#c1e2b512' : '#e6d7a319');
+    light.addColorStop(1, '#173d2410');
+    c.fillStyle = light;
+    c.fillRect(0, 0, 80, 40);
+    for (let i = 0; i < 85; i++) {
+      c.fillStyle = i % 2 ? '#e1dcb011' : '#1834210c';
+      c.fillRect(rand() * 80, rand() * 36, 1 + rand() * 2, 0.6);
+    }
+    c.restore();
     if (wet) {
       for (let i = 0; i < 4; i++) {
         const x = 22 + rand() * 35;
@@ -497,7 +592,7 @@ export class TextureAtlas {
             [x, y],
             [x + 8, y - 4],
           ],
-          '#a5ceba',
+          '#b4e6da',
           0.7,
         );
       }
@@ -536,7 +631,7 @@ export class TextureAtlas {
             [x, y],
             [x - 1, y - 2],
           ],
-          variant % 2 ? '#91aa73' : '#c4d09a',
+          variant % 2 ? '#82af59' : '#c0df8d',
           0.8,
         );
       }
@@ -545,7 +640,7 @@ export class TextureAtlas {
   private tree(c: Ctx, variant: number) {
     const rand = random(variant + 19);
     const palm = variant === 3;
-    ellipse(c, 65, 143, 38, 12, '#536d4d25');
+    ellipse(c, 77, 143, 46, 13, '#173c2740');
     if (palm) {
       line(
         c,
@@ -554,7 +649,7 @@ export class TextureAtlas {
           [62, 92],
           [74, 45],
         ],
-        '#8b8462',
+        '#bd9b62',
         7,
       );
       for (let i = 0; i < 8; i++) {
@@ -565,7 +660,7 @@ export class TextureAtlas {
         c.moveTo(74, 45);
         c.quadraticCurveTo(x, y - 16, x, y + 17);
         c.quadraticCurveTo((74 + x) / 2, y + 1, 74, 45);
-        c.fillStyle = i % 2 ? '#567e4e' : '#71914e';
+        c.fillStyle = i % 2 ? '#3f9457' : '#8ec451';
         c.fill();
       }
     } else {
@@ -577,23 +672,41 @@ export class TextureAtlas {
           [67, 73],
           [62, 73],
         ],
-        '#7c7952',
+        '#b8935f',
       );
-      for (let i = 0; i < 22; i++) {
-        const x = 32 + rand() * 64;
-        const y = 29 + rand() * 73;
-        const r = 13 + rand() * 12;
-        ellipse(
-          c,
-          x,
-          y,
-          r,
-          r * 0.9,
-          ['#4e7545', '#658749', '#76924f', '#85a05b', '#567c45'][i % 5]!,
-        );
+      const clusters = Array.from({ length: 22 }, () => ({
+        x: 32 + rand() * 64,
+        y: 29 + rand() * 73,
+        r: 13 + rand() * 12,
+      })).sort((a, b) => a.y - b.y);
+      for (const { x, y, r } of clusters) {
+        const canopy: Vertex[] = [];
+        for (let i = 0; i < 14; i++) {
+          const angle = (i / 14) * Math.PI * 2;
+          const radius = r * (0.8 + rand() * 0.3);
+          canopy.push([x + Math.cos(angle) * radius, y + Math.sin(angle) * radius * 0.8]);
+        }
+        const tones = c.createRadialGradient(x - 6, y - 6, 1, x, y, r);
+        tones.addColorStop(0, '#b0d96a');
+        tones.addColorStop(0.5, '#71ad4c');
+        tones.addColorStop(1, '#3b804b');
+        polygon(c, canopy, '#559947');
+        c.save();
+        c.clip();
+        c.fillStyle = tones;
+        c.fillRect(x - r * 1.2, y - r, r * 2.4, r * 2);
+        for (let i = 0; i < 16; i++) {
+          ellipse(
+            c,
+            x - r + rand() * r * 2,
+            y - r + rand() * r * 2,
+            1.5 + rand() * 3,
+            1.2,
+            i % 2 ? '#d0c77d35' : '#163c2c30',
+          );
+        }
+        c.restore();
       }
-      for (let i = 0; i < 9; i++)
-        ellipse(c, 40 + rand() * 45, 36 + rand() * 32, 8 + rand() * 10, 9, '#91a962');
     }
   }
   private building(c: Ctx, kind: BuildingKind, level = 3) {
@@ -601,12 +714,12 @@ export class TextureAtlas {
     c.translate(192, 252);
     if (kind === 'temple') {
       ellipse(c, 0, 8, 148, 69, '#56664b25');
-      box(c, 0, 0, 145, 72, 8, '#cfc49e', '#9e9878', '#85876a');
-      box(c, 0, -8, 126, 63, 10, '#e2d5b1', '#b8ac8b', '#a69c7d');
+      box(c, 0, 0, 145, 72, 8, '#e7c890', '#be9e70', '#a8875b');
+      box(c, 0, -8, 126, 63, 10, '#ffe1a4', '#d5b580', '#bd9a6c');
       for (let i = -100; i <= 100; i += 20) {
         box(c, i, -8 - Math.abs(i) * 0.05, 4, 2, 10, '#e4d7b4', '#a89b7d', '#93896b');
       }
-      box(c, 0, -20, 103, 51, 17, '#c6b996', '#a49375', '#958669');
+      box(c, 0, -20, 103, 51, 17, '#e2bc82', '#c39a65', '#ad825a');
       if (level > 1)
         for (const [x, y] of [
           [0, -58],
@@ -614,7 +727,7 @@ export class TextureAtlas {
           [62, -27],
         ] as Vertex[])
           tower(c, x, y, 0.8);
-      box(c, 0, -36, 65, 32, 17, '#e3d2aa', '#bdaa85', '#a49272');
+      box(c, 0, -36, 65, 32, 17, '#ffe1a2', '#d9b17b', '#c39b69');
       if (level > 1) {
         tower(c, -41, -9, 0.75);
         tower(c, 41, -9, 0.75);
@@ -628,6 +741,20 @@ export class TextureAtlas {
           const y = 23 - i * 6;
           box(c, x, y, 4, 2, 13, '#e5d7b1', '#b6a783', '#9d9475');
         }
+      if (level >= 3)
+        for (let i = 0; i < 7; i++) {
+          line(
+            c,
+            [
+              [42 + i * 12, 18 - i * 6],
+              [42 + i * 12, 5 - i * 6],
+              [48 + i * 12, 9 - i * 6],
+            ],
+            '#8d6d44',
+            2,
+          );
+          ellipse(c, 45 + i * 12, 1 - i * 6, 2, 3, '#f2e2b9');
+        }
     } else if (kind === 'baray') {
       box(c, 0, 0, 142, 71, 8, '#bbb99a', '#979c7d', '#848d70');
       polygon(
@@ -638,7 +765,7 @@ export class TextureAtlas {
           [0, 55],
           [-130, -10],
         ],
-        '#75a898',
+        '#52b4bc',
         '#bac3a0',
       );
       for (let i = 0; i < 14; i++) {
@@ -650,7 +777,7 @@ export class TextureAtlas {
             [x, y],
             [x + 22, y - 11],
           ],
-          '#add0b8',
+          '#b5ebe0',
           1,
         );
       }
@@ -680,7 +807,7 @@ export class TextureAtlas {
           [0, 30],
           [-64, -2],
         ],
-        '#88a36a',
+        '#80b85f',
       );
       for (let row = 0; row < 9; row++)
         for (let col = 0; col < 9; col++) {
@@ -694,7 +821,7 @@ export class TextureAtlas {
               [x, y - 6],
               [x + 2, y - 11],
             ],
-            row % 2 ? '#c7c374' : '#aebe6b',
+            row % 2 ? '#d9dd6d' : '#b8d866',
             1.4,
           );
         }
@@ -707,14 +834,14 @@ export class TextureAtlas {
           [-64, -2],
           [0, -34],
         ],
-        '#cdc79b',
+        '#f6d391',
         3,
       );
       dwelling(c, 0, -38, 0.34, '#b99962');
     } else if (kind === 'house' || kind === 'lumber') {
-      box(c, 0, 8, 64, 32, 3, '#b7bd8e', '#9ba37a', '#8e9871');
-      dwelling(c, -14, -5, 1.15, kind === 'lumber' ? '#79815d' : '#a4774d');
-      dwelling(c, 34, 9, 0.68, '#b18a55');
+      box(c, 0, 8, 64, 32, 3, '#bbd28a', '#95b76c', '#80a362');
+      dwelling(c, -14, -5, 1.15, kind === 'lumber' ? '#80a95b' : '#d98658');
+      dwelling(c, 34, 9, 0.68, '#edac68');
       for (let i = 0; i < 4; i++) {
         ellipse(c, -41 + i * 6, 27 - i * 3, 5, 3, '#d1bd8c');
       }
@@ -735,6 +862,68 @@ export class TextureAtlas {
         ellipse(c, 40, 28, 6, 4, '#b9a475');
         ellipse(c, 41, 25, 5, 4, '#d3c18d');
       }
+    } else if (kind === 'warehouse') {
+      box(c, 0, 8, 68, 34, 7, '#c3b69a', '#9d957a', '#87876a');
+      dwelling(c, -12, -10, 1.35, '#88734d');
+      for (let i = 0; i < 6; i++)
+        box(
+          c,
+          20 + (i % 3) * 12,
+          26 - Math.floor(i / 3) * 12,
+          8,
+          4,
+          10,
+          '#dac399',
+          '#b39971',
+          '#958460',
+        );
+      line(
+        c,
+        [
+          [-55, 20],
+          [-28, 34],
+        ],
+        '#826b46',
+        6,
+      );
+      ellipse(c, -50, 29, 6, 8, '#74694c');
+      ellipse(c, -24, 39, 6, 8, '#74694c');
+    } else if (kind === 'lateritepit') {
+      box(c, 0, 4, 65, 32, 5, '#bc9476', '#97745a', '#805f48');
+      polygon(
+        c,
+        [
+          [-35, -4],
+          [0, -23],
+          [38, -4],
+          [0, 15],
+        ],
+        '#805b45',
+        '#d6ab81',
+      );
+      for (let i = 0; i < 8; i++)
+        box(
+          c,
+          -43 + (i % 4) * 16,
+          21 - Math.floor(i / 4) * 11,
+          8,
+          4,
+          9,
+          '#cd966d',
+          '#a76f50',
+          '#8f5b40',
+        );
+      dwelling(c, 25, -25, 0.58, '#b08a53');
+      line(
+        c,
+        [
+          [-30, -2],
+          [-8, -39],
+          [15, -27],
+        ],
+        '#9a8155',
+        4,
+      );
     } else if (kind === 'granary') {
       box(c, 0, 8, 65, 32, 6, '#c4b887', '#a19b71', '#8d906b');
       dwelling(c, 0, -5, 1.25, '#a98a4f');

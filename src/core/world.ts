@@ -1,6 +1,7 @@
 import { CONFIG } from '../data/config';
 import { BUILDINGS } from '../data/buildings';
 import { completedBuilding, registerInfrastructure } from './buildingState';
+import { seedDeposits } from '../simulation/Deposits';
 import { freshSurvival } from './survivalState';
 import { freshProgression } from './progressionState';
 import type { Building, BuildingKind, GameState, Point, Tile } from './types';
@@ -48,7 +49,7 @@ export function createWorld(seed = 802): GameState {
   const rand = random(seed);
   const size = CONFIG.worldSize;
   const state: GameState = {
-    version: 4,
+    version: 6,
     seed,
     width: size,
     height: size,
@@ -65,6 +66,8 @@ export function createWorld(seed = 802): GameState {
     nextId: 1,
     built: {},
     progression: freshProgression(48),
+    logistics: { dispatchCursor: 0 },
+    feedback: { sinceTick: 0, receipts: [] },
     chronicle: [
       {
         tick: 0,
@@ -86,6 +89,8 @@ export function createWorld(seed = 802): GameState {
         water: river ? 5.5 : 0,
         fertility: 0.65 + rand() * 0.35,
         variant: Math.floor(rand() * 5),
+        timber: 0,
+        mineral: null,
       });
     }
   const add = (kind: BuildingKind, x: number, y: number, level = 1) => {
@@ -111,6 +116,7 @@ export function createWorld(seed = 802): GameState {
   add('quarry', 23, 6);
   add('lumber', 7, 17);
   add('dock', 23, 12);
+  add('lateritepit', 21, 24);
   for (let x = 11; x < 29; x++) {
     const t = tileAt(state, x, 10)!;
     if (t.terrain !== 'water') {
@@ -136,5 +142,6 @@ export function createWorld(seed = 802): GameState {
   // A road over a low canal bed is a bridge: both workers and barges can pass.
   tileAt(state, 13, 18)!.terrain = 'bridge';
   registerInfrastructure(state);
+  seedDeposits(state);
   return state;
 }

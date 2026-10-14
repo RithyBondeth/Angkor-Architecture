@@ -2,6 +2,46 @@ import type { BuildingDefinition, BuildingKind, Resource } from '../core/types';
 import { ERAS } from './config';
 
 export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
+  moat: {
+    name: 'Temple moat',
+    subtitle: 'Water around the sanctuary',
+    description:
+      'Excavate within two tiles of a temple. Connect to a filled canal or baray. A wet moat protects foundation stability; keep causeways or bridges for access.',
+    category: 'water',
+    size: 1,
+    cost: { wood: 6, laterite: 2 },
+    workers: 0,
+    icon: 'waves',
+    buildWork: 12,
+    builders: 2,
+  },
+  warehouse: {
+    name: 'City warehouse',
+    subtitle: 'A home for every delivery',
+    description:
+      'Receives nearby land deliveries, adds 1,200 storage per material at full condition, and provides two carts when staffed. Storage remains while service is paused; damage reduces capacity.',
+    category: 'infrastructure',
+    size: 2,
+    cost: { wood: 60, laterite: 30 },
+    workers: 2,
+    icon: 'warehouse',
+    buildWork: 80,
+    builders: 3,
+  },
+  lateritepit: {
+    name: 'Laterite pit',
+    subtitle: 'Earth for the foundations',
+    description:
+      'Extracts finite laterite deposits within three tiles. Carts carry blocks to a dwelling or warehouse over dry land. Use the resource overlay to choose a site.',
+    category: 'production',
+    size: 2,
+    cost: { wood: 50, laterite: 15 },
+    workers: 4,
+    icon: 'wall',
+    buildWork: 72,
+    builders: 3,
+    production: { resource: 'laterite', amount: 8 },
+  },
   baray: {
     name: 'Baray reservoir',
     subtitle: 'Store the monsoon',
@@ -59,7 +99,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
     name: 'Sandstone quarry',
     subtitle: 'Build for the ages',
     description:
-      'Quarry fine sandstone for your monuments. Heavy stone can only reach the city along a navigable waterway to a landing.',
+      'Extract finite sandstone deposits within three tiles for your monuments. Heavy stone can only reach the city along a navigable waterway to a landing.',
     category: 'production',
     size: 2,
     cost: { wood: 55, laterite: 25 },
@@ -87,7 +127,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
     name: 'Woodcutter’s lodge',
     subtitle: 'From forest to city',
     description:
-      'Harvests timber from nearby forest. Workers carry wood to the village over dry land.',
+      'Harvests finite timber from unoccupied forest within six tiles. Exhausted trees are cleared. Workers carry wood to the village over dry land.',
     category: 'production',
     size: 2,
     cost: { wood: 25, laterite: 10 },
@@ -101,7 +141,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
     name: 'River landing',
     subtitle: 'Connect the kingdom',
     description:
-      'Receives sandstone barges. Place beside a river or canal to bring the quarries into your supply network.',
+      'Receives sandstone and supplies one barge when staffed (40 blocks per trip). Place beside a river or canal to bring the quarries into your supply network.',
     category: 'water',
     size: 2,
     cost: { wood: 45, laterite: 20 },
@@ -114,7 +154,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
     name: 'Floodgate',
     subtitle: 'Balance the waters',
     description:
-      'Regulates an existing canal. Open it to let water and barges through, or close it to hold back the monsoon.',
+      'Regulates an existing canal or moat. Open it to let water and barges through, or close it to hold back the monsoon.',
     category: 'water',
     size: 1,
     cost: { wood: 25, laterite: 30 },
@@ -140,7 +180,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
     name: 'Timber bridge',
     subtitle: 'Bring both banks together',
     description:
-      'Spans one river or canal tile. Workers cross on the deck while water and barges continue underneath. Place several adjoining bridges to cross wider water.',
+      'Spans one river, canal, or moat tile. Workers cross on the deck while water and barges continue underneath. Place several adjoining bridges to cross wider water.',
     category: 'infrastructure',
     size: 1,
     cost: { wood: 20, laterite: 8 },
@@ -199,4 +239,7 @@ export const BUILD_ORDER: BuildingKind[] = [
   'bridge',
   'granary',
   'workshop',
+  'warehouse',
+  'lateritepit',
+  'moat',
 ];

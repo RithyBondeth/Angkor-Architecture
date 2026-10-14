@@ -1,0 +1,1259 @@
+/* The strategy-game shell shares tokens with every existing simulation panel. */
+:root,
+[data-theme='light'] {
+  --paper: #fff8e6;
+  --surface: #f5edcf;
+  --ink: #36543a;
+  --muted: #687556;
+  --border: #b3bd8a;
+  --green: #387a45;
+  --pale-green: #e8efcf;
+  --map: #9ec77e;
+  --shadow: 0 5px 0 #4c70452e, 0 12px 28px #365f3d26;
+  --warning-border: #bf8047;
+  --warning-surface: #fae8bc;
+  --panel-glass: #fff8e8f7;
+  --panel-stroke: #9eaf77;
+  --gold: #8c682e;
+  --positive: #4d7d43;
+  --button: #64a54e;
+  --button-dark: #36703d;
+  --button-ink: #fffbed;
+  --card: #f2f1d9;
+  --card-hover: #edf2d5;
+  --card-active: #e2edc7;
+  --active-surface: #d8e8b8;
+  --active-ink: #3a713f;
+  color-scheme: light;
+  background: #a4ca88;
+}
+[data-theme='dark'] {
+  --paper: #2b4938;
+  --surface: #213c2e;
+  --ink: #fff2d3;
+  --muted: #cfdbc0;
+  --border: #718861;
+  --green: #c4e291;
+  --pale-green: #425d3d;
+  --map: #9ec77e;
+  --shadow: 0 5px 0 #1a382f40, 0 12px 28px #29492d40;
+  --warning-border: #e6b779;
+  --warning-surface: #655234;
+  --panel-glass: #294735f7;
+  --panel-stroke: #70875e;
+  --gold: #efc87d;
+  --positive: #c2df9f;
+  --card: #35533b;
+  --card-hover: #446342;
+  --card-active: #507345;
+  --active-surface: #4f7042;
+  --active-ink: #fff4d4;
+}
+body {
+  background: var(--surface);
+}
+button:focus-visible,
+a:focus-visible,
+canvas:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+[hidden] {
+  display: none !important;
+}
+.sr-only,
+.skip-link:not(:focus) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.skip-link:focus {
+  position: absolute;
+  top: 94px;
+  left: 24px;
+  z-index: 10;
+  padding: 12px 20px;
+  background: var(--paper);
+}
+.game-shell {
+  display: block;
+  height: 100dvh;
+  min-height: 520px;
+  overflow: hidden;
+}
+.game-shell .map-area {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  background: radial-gradient(ellipse at 50% 35%, #c3df9630, #689d5829 85%), var(--map);
+}
+.game-shell .map-area::after {
+  z-index: 0;
+  background: linear-gradient(180deg, #f6eac04d, transparent 24%, transparent 80%, #51905a26);
+  box-shadow: inset 0 0 120px #609b4e24;
+}
+.command-bar {
+  position: absolute;
+  z-index: 4;
+  top: 20px;
+  left: 24px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-height: 72px;
+  padding: 12px 20px;
+  background: var(--panel-glass);
+  border: 2px solid var(--panel-stroke);
+  border-radius: 14px;
+  box-shadow:
+    var(--shadow),
+    inset 0 1px #fff1;
+  backdrop-filter: blur(8px);
+}
+.game-brand {
+  display: flex;
+  align-items: center;
+  text-align: left;
+  gap: 18px;
+  padding-right: 20px;
+  border-right: 1px solid var(--border);
+  font:
+    600 17px/1 'Fredoka',
+    sans-serif;
+  letter-spacing: 3px;
+  flex-shrink: 0;
+}
+.game-brand small {
+  display: block;
+  font:
+    400 7px/1.5 'DM Sans',
+    sans-sans-serif;
+  letter-spacing: 3.5px;
+  margin-top: 5px;
+}
+.game-brand .royal-mark {
+  width: 31px;
+  height: 31px;
+}
+.game-brand .royal-mark .ph {
+  font-size: 22px;
+}
+.game-brand .royal-mark .angkor-emblem {
+  width: 26px;
+  height: 26px;
+}
+.command-bar .resource-bar {
+  flex: 1;
+  height: auto;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  background: none;
+  border: 0;
+  padding: 0;
+  overflow: visible;
+}
+.command-bar .resource {
+  border: 0;
+  padding: 0;
+  gap: 8px;
+  min-width: 0;
+}
+.command-bar .resource-icon {
+  background: transparent;
+  color: var(--gold);
+  border-radius: 0;
+  width: 22px;
+  height: 28px;
+}
+.command-bar .resource-icon .ph {
+  font-size: 22px;
+}
+.command-bar .resource-label {
+  font-size: 8px;
+  line-height: 1;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.command-bar .resource strong {
+  font:
+    500 21px 'Fredoka',
+    sans-serif;
+  letter-spacing: 0;
+}
+.command-bar .resource small {
+  margin-top: 3px;
+  font-size: 8px;
+  letter-spacing: 0;
+  color: var(--positive);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.command-actions {
+  display: flex;
+  gap: 4px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+}
+.command-actions .icon-button {
+  width: 34px;
+  height: 38px;
+  color: var(--muted);
+}
+.game-shell .world-heading {
+  top: 120px;
+  left: 110px;
+  display: block;
+  right: auto;
+}
+.game-shell .region-label {
+  color: #365d3b;
+  font-size: 8px;
+  letter-spacing: 2px;
+  text-shadow: 0 1px 3px #f2f2c680;
+}
+.game-shell .world-heading h1 {
+  font:
+    500 36px/1.1 'Fredoka',
+    sans-serif;
+  letter-spacing: -0.5px;
+  color: #315b36;
+  margin: 8px 0 6px;
+  text-shadow: 0 2px #eff4d088;
+}
+.world-heading h1 em {
+  font-weight: 400;
+  color: #46723c;
+}
+.era-caption {
+  font-size: 10px;
+  color: #456d43;
+  text-shadow: 0 1px 3px #f2f2c680;
+}
+.mobile-camera-controls {
+  display: none;
+}
+.season-card {
+  position: absolute;
+  top: 120px;
+  left: 490px;
+  width: 180px;
+  padding: 0 0 0 20px;
+  border-left: 1px solid #698f5b50;
+  z-index: 1;
+  pointer-events: none;
+}
+.season-card .weather-badge {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  backdrop-filter: none;
+  gap: 10px;
+}
+.season-card #season-icon .ph {
+  color: #59894b;
+  font-size: 26px;
+}
+.season-card .weather-badge strong {
+  color: #365b3a;
+  font-size: 12px;
+}
+.season-card .weather-badge small {
+  color: #567949;
+  font-size: 9px;
+  margin-top: 5px;
+}
+.season-card .season-track {
+  margin: 12px 0 6px;
+  height: 3px;
+  background: #67844a26;
+}
+.season-card .season-track span {
+  background: #78a94e;
+}
+#sidebar-season {
+  font-size: 8px;
+  color: #567949;
+}
+.kingdom-nav {
+  position: absolute;
+  top: 120px;
+  left: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 5;
+  padding: 6px;
+  background: var(--panel-glass);
+  border: 2px solid var(--panel-stroke);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+}
+.kingdom-nav .nav-item {
+  position: relative;
+  width: 42px;
+  min-height: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 8px;
+  color: var(--muted);
+  border: 1px solid transparent;
+  margin: 0;
+}
+.kingdom-nav .nav-item .ph {
+  font-size: 22px;
+  color: inherit;
+}
+.kingdom-nav .nav-item.active[aria-pressed='true'] {
+  background: #5b9c4a;
+  color: #fff8dd;
+  border-color: #3d763f;
+}
+.kingdom-nav .nav-item:hover {
+  color: var(--gold);
+  background: var(--pale-green);
+}
+.nav-tooltip {
+  position: absolute;
+  left: calc(100% + 18px);
+  background: var(--paper);
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-4px);
+  transition:
+    opacity 150ms,
+    transform 150ms;
+}
+.nav-item:hover .nav-tooltip,
+.nav-item:focus-visible .nav-tooltip {
+  opacity: 1;
+  transform: translateX(0);
+}
+.kingdom-nav .nav-item > small {
+  position: absolute;
+  right: 1px;
+  top: 1px;
+  min-width: 12px;
+  font-size: 8px;
+  line-height: 1;
+  background: var(--paper);
+  color: var(--gold);
+  border-radius: 2px;
+  padding: 2px;
+  margin: 0;
+}
+.inspector-shell {
+  position: absolute;
+  top: 120px;
+  right: 24px;
+  width: 292px;
+  max-height: calc(100% - 420px);
+  z-index: 3;
+  display: none;
+  flex-direction: column;
+  border: 2px solid var(--panel-stroke);
+  border-radius: 14px;
+  background: var(--panel-glass);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.inspector-shell.is-open {
+  display: flex;
+  animation: panel-arrive 200ms ease-out;
+}
+.inspector-frame-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px 8px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.inspector-frame-heading > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--gold);
+  font-size: 8px;
+  letter-spacing: 1.5px;
+}
+.inspector-frame-heading .ph {
+  font-size: 16px;
+}
+.game-shell .inspector {
+  position: static;
+  display: block;
+  padding: 20px;
+  width: 100%;
+  max-height: none;
+  min-height: 0;
+  overflow-y: auto;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: none;
+  scrollbar-color: #b8a36e50 transparent;
+}
+.game-shell .inspector h2 {
+  font:
+    500 28px/1.12 'Fredoka',
+    sans-serif;
+  margin: 8px 0 12px;
+  letter-spacing: -0.3px;
+  text-wrap: balance;
+}
+.game-shell .panel-eyebrow {
+  color: var(--gold);
+  font-size: 8px;
+}
+.game-shell .panel-subtitle,
+.game-shell .building-description {
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.game-shell .inspector-art {
+  background: radial-gradient(ellipse at center, #bfb48029, transparent 75%);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.game-shell .detail-row,
+.game-shell .stat-heading {
+  font-size: 11px;
+}
+.game-shell .detail-row strong,
+.game-shell .stat-heading strong,
+.game-shell .operational,
+.game-shell .big-stat {
+  color: var(--ink);
+}
+.game-shell .objective strong,
+.game-shell .milestone strong,
+.game-shell .commission-objective strong {
+  color: var(--ink);
+}
+.game-shell .era-note,
+.game-shell .season-note {
+  background: var(--pale-green);
+  border-color: var(--border);
+}
+.game-shell .season-note p {
+  color: var(--muted);
+}
+.game-shell .objective,
+.game-shell .campaign-objective,
+.game-shell .logistics-summary,
+.game-shell .survival-summary,
+.game-shell .player-feedback,
+.game-shell .feedback-card {
+  border-color: var(--border);
+}
+.game-shell .objective:hover,
+.game-shell .monument-row:hover {
+  background: var(--pale-green);
+}
+.game-shell .map-top-controls {
+  top: auto;
+  bottom: 248px;
+  left: 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  z-index: 2;
+}
+.game-shell .map-view-buttons,
+.game-shell .time-controls,
+.game-shell .zoom-controls,
+.game-shell .minimap-card,
+.game-shell .build-tray {
+  background: var(--panel-glass);
+  border: 2px solid var(--panel-stroke);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+}
+.game-shell .map-view-buttons {
+  padding: 5px;
+  gap: 3px;
+}
+.game-shell .map-view-buttons .icon-button {
+  width: 34px;
+  height: 34px;
+  color: var(--muted);
+}
+.game-shell .map-view-buttons .icon-button.active {
+  color: var(--gold);
+  background: var(--pale-green);
+}
+.game-shell #overlay-label {
+  background: var(--paper);
+  border: 1px solid var(--border);
+  color: var(--ink);
+  max-width: 280px;
+  line-height: 1.5;
+  font-size: 10px;
+}
+.game-shell .map-bottom-controls {
+  position: absolute;
+  bottom: 20px;
+  left: 24px;
+  right: 24px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 20px;
+}
+.game-shell .time-controls {
+  padding: 5px;
+  gap: 2px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.game-shell .time-controls .icon-button,
+.game-shell .zoom-controls .icon-button {
+  width: 30px;
+  height: 30px;
+  color: var(--ink);
+}
+.game-shell .time-controls > button:not(.icon-button) {
+  font-size: 11px;
+  width: 30px;
+  height: 30px;
+  color: var(--muted);
+}
+.game-shell .time-controls > button.active {
+  background: var(--active-surface);
+  color: var(--active-ink);
+  border-radius: 7px;
+}
+.game-shell #game-day {
+  font-size: 11px;
+  color: var(--ink);
+  padding: 0 8px;
+  font-variant-numeric: tabular-nums;
+}
+.game-shell .time-divider {
+  background: var(--border);
+  margin: 0 4px;
+}
+.game-shell .map-hint {
+  color: #3b6540;
+  font-size: 10px;
+  opacity: 1;
+  margin-left: 0;
+  max-width: 40%;
+  text-shadow: 0 1px #f0f5d299;
+}
+.game-shell .save-indicator {
+  margin-left: auto;
+  font-size: 9px;
+  color: #375b39;
+  text-shadow: 0 1px #f0f5d299;
+}
+.game-shell .save-indicator .ph {
+  color: #477943;
+}
+.game-shell .minimap-card {
+  display: block;
+  right: 24px;
+  left: auto;
+  bottom: 80px;
+  width: 170px;
+  padding: 12px;
+}
+.game-shell .minimap-card > span {
+  color: var(--gold);
+  font-size: 7px;
+  margin-bottom: 10px;
+}
+.game-shell .minimap-card canvas {
+  height: 118px;
+  border: 1px solid var(--border);
+  opacity: 0.9;
+}
+.game-shell .minimap-card .zoom-controls {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  background: none;
+}
+.game-shell #zoom-value {
+  color: var(--muted);
+  font-size: 9px;
+  min-width: 30px;
+}
+.game-shell .build-tray {
+  left: 96px;
+  right: 214px;
+  bottom: 80px;
+  padding: 12px;
+  z-index: 3;
+}
+.game-shell .build-tray-header {
+  flex-direction: row;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 10px;
+}
+.game-shell .build-tray-header h2 {
+  font:
+    500 15px 'Fredoka',
+    sans-serif;
+  gap: 10px;
+}
+.game-shell .build-tray-header h2 .ph {
+  color: var(--gold);
+}
+.game-shell .build-tabs {
+  background: none;
+  gap: 4px;
+  padding: 0;
+  width: auto;
+}
+.game-shell .build-tabs button {
+  font-size: 10px;
+  padding: 7px 12px;
+  color: var(--muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+.game-shell .build-tabs button.active {
+  background: var(--active-surface);
+  border-color: #9cba73;
+  color: var(--gold);
+  box-shadow: none;
+}
+.game-shell .dock-toggle {
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+}
+.game-shell .dock-toggle .ph {
+  transition: transform 180ms;
+}
+.game-shell .build-tray.collapsed .building-list {
+  display: none;
+}
+.game-shell .build-tray.collapsed .build-tray-header {
+  margin: 0;
+}
+.game-shell .build-tray.collapsed .dock-toggle .ph {
+  transform: rotate(180deg);
+}
+.game-shell .building-list {
+  grid-auto-columns: 126px;
+  gap: 8px;
+  scrollbar-color: #d3ba7f50 transparent;
+  scroll-padding: 4px;
+}
+.game-shell .building-card {
+  border-color: var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  padding: 0 10px 10px;
+}
+.game-shell .building-card:hover {
+  border-color: #7fa15d;
+  background: var(--card-hover);
+}
+.game-shell .building-card.selected {
+  border-color: var(--gold);
+  box-shadow: inset 0 0 0 1px #87b06760;
+  background: var(--card-active);
+}
+.game-shell .building-art {
+  background: radial-gradient(ellipse at 50% 80%, #c5da8738, transparent 75%);
+  height: 66px;
+  overflow: hidden;
+}
+.game-shell .building-art img {
+  height: 82px;
+  width: 108px;
+  margin-top: -12px;
+  filter: drop-shadow(0 4px 6px #061a1750);
+}
+.game-shell .building-art kbd {
+  color: var(--muted);
+  background: var(--paper);
+  border-color: var(--border);
+  font-size: 8px;
+  width: 16px;
+  height: 16px;
+}
+.game-shell .building-card > strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink);
+  font:
+    500 12px 'Fredoka',
+    sans-serif;
+}
+.game-shell .building-cost {
+  color: var(--muted);
+  font-size: 9px;
+  gap: 8px;
+}
+.game-shell .building-cost .ph {
+  color: var(--gold);
+  font-size: 12px;
+}
+.game-shell .build-plus {
+  color: var(--muted);
+}
+.game-shell .placement-banner {
+  top: 216px;
+  bottom: auto;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(600px, calc(100% - 190px));
+  padding: 12px 16px;
+  background: var(--paper);
+  color: var(--ink);
+  border-color: var(--gold);
+  z-index: 6;
+  font-size: 12px;
+}
+.game-shell .placement-banner small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.game-shell .toast {
+  position: absolute;
+  left: 50%;
+  bottom: 270px;
+  transform: translateX(-50%);
+  max-width: min(520px, calc(100% - 48px));
+  width: max-content;
+  background: var(--paper);
+  color: var(--ink);
+  border: 2px solid var(--panel-stroke);
+  font-size: 12px;
+  z-index: 8;
+}
+.game-shell .world-loading {
+  background: #dcebb7;
+  color: #477541;
+  z-index: 9;
+}
+.game-shell .world-loading strong {
+  font-size: 38px;
+}
+dialog {
+  background: var(--paper);
+  border-color: var(--panel-stroke);
+  color: var(--ink);
+  border-radius: 18px;
+  padding: 36px;
+  box-shadow: 0 20px 100px #06150ed9;
+}
+dialog::backdrop {
+  background: #061b16b8;
+  backdrop-filter: blur(10px);
+}
+dialog h2 {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 500;
+  font-size: 40px;
+  line-height: 1.05;
+  text-wrap: balance;
+  margin-bottom: 20px;
+}
+dialog > p {
+  font-size: 12px;
+  color: var(--muted);
+}
+.dialog-symbol {
+  color: var(--gold);
+  background: var(--pale-green);
+  border-color: var(--border);
+  border-radius: 10px;
+}
+.dialog-symbol .ph {
+  color: var(--gold);
+}
+.eyebrow {
+  color: var(--gold);
+  font-size: 9px;
+}
+.primary-button {
+  color: var(--button-ink);
+  background: var(--button);
+  border: 2px solid #91be6f;
+  border-radius: 10px;
+  font:
+    500 14px 'Fredoka',
+    sans-serif;
+  box-shadow: 0 4px 0 var(--button-dark);
+}
+.primary-button:hover {
+  color: var(--button-ink);
+  background: #78b65a;
+}
+.secondary-button {
+  color: var(--ink);
+  background: var(--pale-green);
+  border-color: var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.secondary-button:hover {
+  color: var(--gold);
+  background: var(--pale-green);
+}
+.danger-button {
+  background: #925c44;
+  color: #fff1df;
+  border-radius: 8px;
+}
+.settings-row strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+.settings-row small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.theme-switch {
+  background: #657563;
+}
+.theme-switch[aria-checked='true'] {
+  background: #7ba455;
+}
+.theme-switch > span {
+  background: #fff6cf;
+}
+.return-menu {
+  margin-top: 12px;
+}
+.guide-steps span {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.guide-steps strong {
+  color: var(--ink);
+}
+.keyboard-guide {
+  background: var(--pale-green);
+  color: var(--muted);
+}
+.keyboard-guide kbd {
+  color: var(--gold);
+  background: var(--surface);
+  border-color: var(--border);
+}
+@keyframes panel-arrive {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@media (max-width: 1180px) {
+  .command-bar {
+    gap: 16px;
+    padding: 12px 16px;
+  }
+  .game-brand {
+    padding-right: 16px;
+  }
+  .game-brand > span:last-child {
+    display: none;
+  }
+  .command-bar .resource-bar {
+    gap: 8px;
+  }
+  .command-bar .resource {
+    gap: 6px;
+  }
+  .command-actions {
+    gap: 0;
+    padding-left: 8px;
+  }
+  .command-actions .icon-button {
+    width: 30px;
+  }
+  .season-card {
+    left: 430px;
+  }
+  .game-shell .build-tray-header {
+    gap: 12px;
+  }
+  .game-shell .build-tabs button {
+    padding: 7px 8px;
+    font-size: 9px;
+  }
+  .inspector-shell {
+    width: 270px;
+  }
+}
+@media (max-width: 900px) {
+  .command-bar {
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    gap: 12px;
+  }
+  .command-bar .resource-label {
+    font-size: 7px;
+  }
+  .command-bar .resource strong {
+    font-size: 16px;
+  }
+  .command-bar .resource small {
+    display: none;
+  }
+  .command-bar .resource-icon {
+    width: 16px;
+  }
+  .command-bar .resource-icon .ph {
+    font-size: 18px;
+  }
+  .command-actions .icon-button {
+    width: 28px;
+  }
+  .kingdom-nav {
+    left: 12px;
+    top: 108px;
+  }
+  .game-shell .world-heading {
+    left: 88px;
+    top: 108px;
+  }
+  .game-shell .world-heading h1 {
+    font-size: 30px;
+  }
+  .season-card {
+    top: 182px;
+    left: 88px;
+    padding: 0;
+    border: 0;
+    width: 160px;
+  }
+  .season-card .season-track,
+  #sidebar-season {
+    display: none;
+  }
+  .inspector-shell {
+    top: 108px;
+    right: 12px;
+    width: 260px;
+    max-height: calc(100% - 410px);
+  }
+  .game-shell .build-tray {
+    left: 80px;
+    right: 12px;
+  }
+  .game-shell .build-tray-header h2 {
+    font-size: 11px;
+  }
+  .game-shell .minimap-card {
+    display: none;
+  }
+  .game-shell .map-bottom-controls {
+    left: 12px;
+    right: 12px;
+    gap: 12px;
+  }
+  .game-shell .map-top-controls {
+    left: 80px;
+  }
+}
+@media (max-width: 600px) {
+  .mobile-camera-controls {
+    position: absolute;
+    display: flex;
+    left: 12px;
+    top: 204px;
+    z-index: 2;
+    padding: 3px;
+    background: var(--panel-glass);
+    border: 2px solid var(--panel-stroke);
+    border-radius: 10px;
+  }
+  .mobile-camera-controls .icon-button {
+    width: 30px;
+    height: 30px;
+  }
+  .game-shell {
+    min-height: 560px;
+  }
+  .command-bar {
+    padding: 10px;
+    gap: 10px;
+    min-height: 64px;
+  }
+  .game-brand {
+    display: none;
+  }
+  .command-bar .resource-bar {
+    display: flex;
+    overflow-x: auto;
+    gap: 16px;
+    scrollbar-width: none;
+  }
+  .command-bar .resource {
+    min-width: 64px;
+    flex-shrink: 0;
+  }
+  .command-bar .resource-label {
+    font-size: 8px;
+  }
+  .command-bar .resource strong {
+    font-size: 17px;
+  }
+  .command-bar .resource-icon {
+    width: 18px;
+  }
+  .command-actions {
+    gap: 0;
+    padding: 0 0 0 6px;
+  }
+  .command-actions button:not(:last-child) {
+    display: none;
+  }
+  .command-actions .icon-button {
+    width: 30px;
+  }
+  .game-shell .world-heading {
+    left: 18px;
+    top: 96px;
+  }
+  .game-shell .world-heading h1 {
+    font-size: 28px;
+  }
+  .game-shell .region-label {
+    font-size: 7px;
+    letter-spacing: 1.4px;
+  }
+  .era-caption {
+    display: none;
+  }
+  .season-card {
+    top: 166px;
+    left: 18px;
+    width: auto;
+  }
+  .season-card .weather-badge small {
+    display: none;
+  }
+  .season-card .weather-badge strong {
+    font-size: 10px;
+  }
+  .season-card #season-icon .ph {
+    font-size: 20px;
+  }
+  .kingdom-nav {
+    top: 96px;
+    right: 12px;
+    left: auto;
+    padding: 4px;
+    gap: 3px;
+  }
+  .kingdom-nav .nav-item {
+    width: 30px;
+    min-height: 30px;
+    height: 30px;
+  }
+  .kingdom-nav .nav-item .ph {
+    font-size: 17px;
+  }
+  .nav-tooltip {
+    display: none;
+  }
+  .kingdom-nav .nav-item > small {
+    font-size: 7px;
+  }
+  .inspector-shell {
+    top: 96px;
+    right: 62px;
+    left: 12px;
+    width: auto;
+    max-height: calc(100% - 400px);
+  }
+  .inspector-shell:not(:has(.has-selection)) {
+    max-height: calc(100% - 400px);
+  }
+  .game-shell .inspector {
+    padding: 16px;
+  }
+  .game-shell .inspector h2 {
+    font-size: 28px;
+  }
+  .game-shell .inspector-frame-heading {
+    padding-left: 16px;
+  }
+  .game-shell .inspector-frame-heading > span {
+    font-size: 7px;
+  }
+  .game-shell .map-top-controls {
+    bottom: 244px;
+    left: 12px;
+  }
+  .game-shell .map-view-buttons {
+    gap: 2px;
+    padding: 4px;
+  }
+  .game-shell .map-view-buttons .icon-button {
+    width: 30px;
+    height: 30px;
+  }
+  .game-shell .build-tray {
+    left: 12px;
+    bottom: 68px;
+    padding: 10px;
+  }
+  .game-shell .build-tray-header {
+    position: relative;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .game-shell .build-tray-header h2 {
+    font-size: 10px;
+    width: calc(100% - 36px);
+  }
+  .game-shell .build-tabs {
+    width: 100%;
+    gap: 2px;
+    justify-content: space-between;
+    overflow: auto;
+  }
+  .game-shell .build-tabs button {
+    padding: 5px 6px;
+    font-size: 8px;
+  }
+  .game-shell .dock-toggle {
+    position: absolute;
+    right: 0;
+    top: -4px;
+  }
+  .game-shell .building-list {
+    grid-auto-columns: 112px;
+    gap: 6px;
+  }
+  .game-shell .building-art {
+    height: 54px;
+  }
+  .game-shell .building-art img {
+    height: 82px;
+    width: 100px;
+  }
+  .game-shell .building-card > strong {
+    font-size: 9px;
+  }
+  .game-shell .building-cost {
+    font-size: 8px;
+  }
+  .game-shell .map-bottom-controls {
+    bottom: 12px;
+  }
+  .game-shell .time-controls {
+    gap: 0;
+    padding: 4px;
+  }
+  .game-shell .time-controls > button:not(.icon-button) {
+    width: 26px;
+  }
+  .game-shell #game-day {
+    font-size: 10px;
+    padding: 0 4px;
+  }
+  .game-shell .map-hint {
+    display: none;
+  }
+  .game-shell .save-indicator {
+    font-size: 8px;
+  }
+  .game-shell .save-indicator .ph {
+    display: none;
+  }
+  .game-shell .placement-banner {
+    top: auto;
+    bottom: 294px;
+    max-width: calc(100% - 80px);
+    width: auto;
+    left: 12px;
+    right: 62px;
+    transform: none;
+    font-size: 11px;
+  }
+  .game-shell .placement-banner small {
+    font-size: 9px;
+  }
+  .game-shell .toast {
+    bottom: 294px;
+    font-size: 11px;
+  }
+  dialog {
+    padding: 28px 24px;
+  }
+  dialog h2 {
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 500;
+    font-size: 34px;
+  }
+}
+@media (max-height: 700px) and (min-width: 601px) {
+  .inspector-shell {
+    max-height: calc(100% - 420px);
+  }
+  .kingdom-nav {
+    gap: 3px;
+  }
+  .kingdom-nav .nav-item {
+    height: 34px;
+    min-height: 34px;
+  }
+  .game-shell .world-heading {
+    top: 110px;
+  }
+  .game-shell .building-art {
+    height: 52px;
+  }
+  .game-shell .building-art img {
+    height: 80px;
+  }
+  .game-shell .map-top-controls {
+    bottom: 230px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .inspector-shell.is-open {
+    animation: none;
+  }
+  .nav-tooltip,
+  .dock-toggle .ph {
+    transition: none;
+  }
+}

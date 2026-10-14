@@ -50,6 +50,8 @@ export function campaignPanel(state: GameState): string {
 export function templeUpgradeButton(b: Building, state: GameState): string {
   if (b.level >= 3 || b.condition < 100) return '';
   const locked = earnedMerit(state) < templeUpgradeMerit(b.level);
+  if (b.engineering && b.engineering.stability < 60)
+    return '<p class="campaign-note">Restore foundation stability to 60% before starting the next stage.</p>';
   return `<button class="primary-button" data-action="upgrade" ${locked ? 'disabled' : ''}>${icon(locked ? 'lock' : 'hammer')}Advance construction<span>${locked ? `${templeUpgradeMerit(b.level)} merit` : `${b.level * 80} stone`}</span></button>${locked ? '<p class="campaign-note">Reach the Temple city era to unlock sculpted reliefs.</p>' : ''}`;
 }
 export function supportDetails(b: Building, state: GameState): string {

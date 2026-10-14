@@ -1,3 +1,4 @@
+import { freshEngineering } from '../simulation/TempleEngineering';
 import { BUILDINGS } from '../data/buildings';
 import type { Building, BuildingKind, GameState, Resources, TerrainSnapshot } from './types';
 
@@ -39,6 +40,8 @@ export function completedBuilding(
     level,
     enabled: true,
     stock: 0,
+    deliveryIssue: null,
+    engineering: kind === 'temple' ? freshEngineering(level >= 3) : null,
     condition: 100,
     crop: kind === 'paddy' ? { stress: 0, failed: false } : null,
     construction: null,

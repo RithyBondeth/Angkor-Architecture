@@ -1,6 +1,7 @@
 export type Resource = 'rice' | 'wood' | 'sandstone' | 'laterite' | 'merit';
 export type Resources = Record<Resource, number>;
-export type Terrain = 'grass' | 'forest' | 'water' | 'canal' | 'reservoir' | 'road' | 'bridge';
+export type Terrain =
+  'grass' | 'forest' | 'water' | 'canal' | 'moat' | 'reservoir' | 'road' | 'bridge';
 export type BuildingKind =
   | 'baray'
   | 'canal'
@@ -14,9 +15,12 @@ export type BuildingKind =
   | 'road'
   | 'bridge'
   | 'granary'
-  | 'workshop';
+  | 'workshop'
+  | 'warehouse'
+  | 'lateritepit'
+  | 'moat';
 export type Category = 'all' | 'water' | 'production' | 'civic' | 'infrastructure';
-export type Overlay = 'none' | 'water' | 'logistics' | 'grid';
+export type Overlay = 'none' | 'water' | 'logistics' | 'resources' | 'grid';
 export interface Point {
   x: number;
   y: number;
@@ -27,6 +31,8 @@ export interface Tile extends Point {
   water: number;
   fertility: number;
   variant: number;
+  timber: number;
+  mineral: { resource: 'sandstone' | 'laterite'; remaining: number } | null;
 }
 export interface Building extends Point {
   id: string;
@@ -34,12 +40,14 @@ export interface Building extends Point {
   level: number;
   enabled: boolean;
   stock: number;
+  deliveryIssue: DeliveryIssue | null;
+  engineering: TempleEngineering | null;
   condition: number;
   crop: { stress: number; failed: boolean } | null;
   construction: ConstructionProject | null;
   investment: Partial<Resources>;
   terrainBefore: TerrainSnapshot[];
-  /** A completed canal underneath a floodgate or bridge. Only one layer is supported. */
+  /** A completed canal or moat underneath a floodgate or bridge. Only one layer is supported. */
   underlay: Building | null;
 }
 export interface TerrainSnapshot extends Point {
@@ -71,6 +79,7 @@ export interface BuildingDefinition {
 export interface Courier {
   id: string;
   sourceId: string;
+  targetId: string;
   kind: 'worker' | 'barge';
   path: Point[];
   progress: number;
@@ -84,7 +93,7 @@ export interface ChronicleEntry {
   icon: string;
 }
 export interface GameState {
-  version: 4;
+  version: 6;
   seed: number;
   width: number;
   height: number;
@@ -102,13 +111,15 @@ export interface GameState {
   chronicle: ChronicleEntry[];
   built: Partial<Record<BuildingKind, number>>;
   progression: ProgressionState;
+  logistics: { dispatchCursor: number };
+  feedback: { sinceTick: number; receipts: { tick: number; resource: Resource; amount: number }[] };
 }
 export interface PlacementResult {
   ok: boolean;
   message: string;
 }
 export interface SaveEnvelope {
-  schema: 4;
+  schema: 6;
   savedAt: number;
   state: GameState;
 }
@@ -140,4 +151,26 @@ export interface RoyalCommission {
   description: string;
   goals: readonly CampaignGoal[];
   reward: Partial<Resources>;
+}
+
+export const DELIVERY_ISSUES = [
+  'no-workers',
+  'storage-full',
+  'transport-full',
+  'no-receiver',
+  'receiver-unavailable',
+  'closed-gate',
+  'shallow-water',
+  'water-obstacles',
+  'disconnected-waterway',
+  'flooded-route',
+  'ruined-route',
+  'blocked-land-route',
+  'depleted',
+] as const;
+export type DeliveryIssue = (typeof DELIVERY_ISSUES)[number];
+export interface TempleEngineering {
+  stability: number;
+  relief: number[];
+  reliefComplete: boolean;
 }

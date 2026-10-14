@@ -6,10 +6,13 @@ import { workforce } from '../simulation/Workforce';
 import { freshSurvival } from './survivalState';
 import { freshProgression } from './progressionState';
 import { COMMISSIONS } from '../data/progression';
+import { freshEngineering, RELIEF_TARGET } from '../simulation/TempleEngineering';
+import { seedDeposits } from '../simulation/Deposits';
+import { DELIVERY_ISSUES } from './types';
 import type { Building, GameState } from './types';
 
 const resources = ['rice', 'wood', 'sandstone', 'laterite', 'merit'];
-const terrains = ['grass', 'forest', 'water', 'canal', 'reservoir', 'road', 'bridge'];
+const terrains = ['grass', 'forest', 'moat', 'water', 'canal', 'reservoir', 'road', 'bridge'];
 const finite = (n: unknown, min = 0, max = 1e8): n is number =>
   typeof n === 'number' && Number.isFinite(n) && n >= min && n <= max;
 const integer = (n: unknown, min = 0, max = 1e8): n is number =>
@@ -18,7 +21,7 @@ const record = (n: unknown): n is Record<string, unknown> =>
   typeof n === 'object' && n !== null && !Array.isArray(n);
 
 /** Validate untrusted local JSON before it can reach the simulation or DOM. */
-function validateShape(value: unknown, version: 1 | 2 | 3 | 4 = 4): boolean {
+function validateShape(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 = 6): boolean {
   if (!record(value)) return false;
   const s = value as unknown as GameState;
   if (
@@ -49,6 +52,22 @@ function validateShape(value: unknown, version: 1 | 2 | 3 | 4 = 4): boolean {
     !resources.every((k) => finite(s.resources[k as keyof typeof s.resources], 0, 99999))
   )
     return false;
+  if (
+    version >= 6 &&
+    (!record(s.feedback) ||
+      !integer(s.feedback.sinceTick, 0, s.tick) ||
+      !Array.isArray(s.feedback.receipts) ||
+      s.feedback.receipts.length > 2500 ||
+      !s.feedback.receipts.every(
+        (r) =>
+          record(r) &&
+          integer(r.tick, s.feedback.sinceTick, s.tick) &&
+          resources.includes(r.resource) &&
+          finite(r.amount, 0, 1e8),
+      ))
+  )
+    return false;
+  if (version >= 5 && (!record(s.logistics) || !integer(s.logistics.dispatchCursor))) return false;
   if (!Array.isArray(s.tiles) || s.tiles.length !== s.width * s.height) return false;
   if (
     !s.tiles.every(
@@ -60,7 +79,13 @@ function validateShape(value: unknown, version: 1 | 2 | 3 | 4 = 4): boolean {
         finite(t.elevation, -20, 100) &&
         finite(t.water, 0, 1000) &&
         finite(t.fertility, 0, 1) &&
-        integer(t.variant, 0, 4),
+        integer(t.variant, 0, 4) &&
+        (version < 5 ||
+          (finite(t.timber, 0, 10000) &&
+            (t.mineral === null ||
+              (record(t.mineral) &&
+                ['sandstone', 'laterite'].includes(t.mineral.resource) &&
+                finite(t.mineral.remaining, 0, 100000))))),
     )
   )
     return false;
@@ -78,7 +103,7 @@ function validateShape(value: unknown, version: 1 | 2 | 3 | 4 = 4): boolean {
       !integer(b.y, 0, s.height - 1) ||
       !integer(b.level, 1, 3) ||
       typeof b.enabled !== 'boolean' ||
-      !finite(b.stock, 0, 1000)
+      !finite(b.stock, 0, version >= 5 ? CONFIG.maxResource : 1000)
     )
       return false;
     if (Number(b.id.slice(1)) >= s.nextId) return false;
@@ -107,10 +132,17 @@ function validateShape(value: unknown, version: 1 | 2 | 3 | 4 = 4): boolean {
         (b) => b.id === c.sourceId && BUILDINGS[b.kind].production?.resource === c.resource,
       ) ||
       !['worker', 'barge'].includes(c.kind) ||
+      (version >= 5 &&
+        (typeof c.targetId !== 'string' ||
+          !s.buildings.some(
+            (b) =>
+              b.id === c.targetId &&
+              (c.kind === 'barge' ? b.kind === 'dock' : ['house', 'warehouse'].includes(b.kind)),
+          ))) ||
       !resources.includes(c.resource) ||
       !finite(c.amount, 0, 1000) ||
       !Array.isArray(c.path) ||
-      c.path.length < 2 ||
+      c.path.length < (version >= 5 ? 1 : 2) ||
       c.path.length > s.tiles.length ||
       !finite(c.progress, 0, c.path.length)
     )
@@ -146,7 +178,7 @@ function validateShape(value: unknown, version: 1 | 2 | 3 | 4 = 4): boolean {
   return (
     record(s.built) &&
     Object.entries(s.built).every(([k, n]) => Object.hasOwn(BUILDINGS, k) && integer(n, 0, 4096)) &&
-    (version === 4 ? validProgression(s) : typeof value.objectivesClaimed === 'boolean')
+    (version >= 4 ? validProgression(s) : typeof value.objectivesClaimed === 'boolean')
   );
 }
 
@@ -178,8 +210,25 @@ function validateBuildingMeta(
   b: Building,
   s: GameState,
   ids: Set<string>,
-  version: 2 | 3 | 4,
+  version: 2 | 3 | 4 | 5 | 6,
 ): boolean {
+  if (version >= 6) {
+    const e = b.engineering;
+    if (b.kind === 'temple') {
+      if (
+        !record(e) ||
+        !finite(e.stability, 0, 100) ||
+        !Array.isArray(e.relief) ||
+        e.relief.length !== 9 ||
+        !e.relief.every((r) => integer(r, 0, 3)) ||
+        typeof e.reliefComplete !== 'boolean' ||
+        (e.reliefComplete && !e.relief.every((r, i) => r === RELIEF_TARGET[i]))
+      )
+        return false;
+    } else if (e !== null) return false;
+  }
+  if (version >= 5 && b.deliveryIssue !== null && !DELIVERY_ISSUES.includes(b.deliveryIssue))
+    return false;
   if (version >= 3) {
     if (!finite(b.condition, 0, 100)) return false;
     if (b.kind === 'paddy') {
@@ -229,7 +278,7 @@ function validateBuildingMeta(
     if (
       !['bridge', 'gate'].includes(b.kind) ||
       !record(u) ||
-      u.kind !== 'canal' ||
+      !['canal', 'moat'].includes(u.kind) ||
       u.construction !== null ||
       u.underlay !== null ||
       u.x !== b.x ||
@@ -257,17 +306,60 @@ export function readGameState(value: unknown): GameState | null {
   if (validateState(value)) return structuredClone(value);
   if (
     !record(value) ||
-    (value.version !== 1 && value.version !== 2 && value.version !== 3) ||
+    (value.version !== 1 &&
+      value.version !== 2 &&
+      value.version !== 3 &&
+      value.version !== 4 &&
+      value.version !== 5) ||
     !validateShape(value, value.version)
   )
     return null;
   const state = structuredClone(value) as unknown as GameState;
   const legacy = value.version === 1;
-  state.version = 4;
-  state.progression = freshProgression(state.resources.merit, state.tick);
-  if (value.objectivesClaimed === true) state.progression.claimed.push('water-foundation');
-  delete (state as unknown as Record<string, unknown>).objectivesClaimed;
-  if (value.version === 3) return validateState(state) ? state : null;
+  state.version = 6;
+  state.feedback = { sinceTick: state.tick, receipts: [] };
+  for (const b of state.buildings) {
+    b.engineering = b.kind === 'temple' ? freshEngineering(b.level >= 3) : null;
+    if (b.underlay) b.underlay.engineering = null;
+  }
+  if (value.version === 5) return validateState(state) ? state : null;
+  state.logistics = { dispatchCursor: 0 };
+  seedDeposits(state);
+  for (const b of state.buildings) {
+    b.deliveryIssue = null;
+    if (b.underlay) b.underlay.deliveryIssue = null;
+  }
+  if (value.version < 4) {
+    state.progression = freshProgression(state.resources.merit, state.tick);
+    if (value.objectivesClaimed === true) state.progression.claimed.push('water-foundation');
+    delete (state as unknown as Record<string, unknown>).objectivesClaimed;
+  }
+  state.couriers = state.couriers.filter((c) => {
+    const end = c.path[c.path.length - 1]!;
+    const target = state.buildings
+      .filter(
+        (b) =>
+          b.enabled &&
+          !b.construction &&
+          (b.condition === undefined || b.condition > 0) &&
+          (c.kind === 'barge' ? b.kind === 'dock' : b.kind === 'house'),
+      )
+      .sort(
+        (a, b) =>
+          Math.abs(a.x - end.x) +
+          Math.abs(a.y - end.y) -
+          Math.abs(b.x - end.x) -
+          Math.abs(b.y - end.y),
+      )[0];
+    if (target) {
+      c.targetId = target.id;
+      return true;
+    }
+    const source = state.buildings.find((b) => b.id === c.sourceId);
+    if (source) source.stock += c.amount;
+    return false;
+  });
+  if (value.version >= 3) return validateState(state) ? state : null;
   state.survival = freshSurvival();
   for (const b of state.buildings) {
     b.condition = 100;

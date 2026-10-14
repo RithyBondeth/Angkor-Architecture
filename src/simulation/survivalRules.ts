@@ -36,7 +36,7 @@ export function floodDepth(state: GameState, b: Building): number {
   return Math.max(...footprint(b).map((p) => tileAt(state, p.x, p.y)!.water));
 }
 export function floodTolerance(b: Building): number {
-  if (b.kind === 'baray' || b.kind === 'canal') return Infinity;
+  if (b.kind === 'baray' || b.kind === 'canal' || b.kind === 'moat') return Infinity;
   if (['bridge', 'gate', 'dock'].includes(b.kind)) return 6;
   return b.kind === 'paddy' ? 1.2 : 0.8;
 }

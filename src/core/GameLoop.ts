@@ -18,7 +18,8 @@ export class GameLoop {
     cancelAnimationFrame(this.frame);
   }
   private update = (now: number) => {
-    const elapsed = Math.min(now - this.last, 100);
+    // RAF timestamps describe the start of a frame and can precede start()'s clock read.
+    const elapsed = Math.max(0, Math.min(now - this.last, 100));
     this.last = now;
     this.accumulator += elapsed * this.game.state.speed;
     while (this.accumulator >= CONFIG.tickMs) {
