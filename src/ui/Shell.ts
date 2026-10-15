@@ -32,6 +32,8 @@ export function createShell(root: HTMLElement) {
       <div class="inspector-shell is-open"><div class="inspector-frame-heading"><span>${icon('compass')} KINGDOM INTELLIGENCE</span><button class="icon-button" data-action="close-inspector" aria-label="Hide kingdom information" title="Hide panel (Esc)">${icon('x')}</button></div><aside id="inspector" class="inspector" aria-label="Kingdom information"></aside></div>
       <div class="map-top-controls"><div class="map-view-buttons" aria-label="Map overlays">${[
         ['water', 'drop', 'Water depth (W)'],
+        ['flow', 'arrows-out-line-horizontal', 'Water flow (F)'],
+        ['elevation', 'mountains', 'Ground elevation (E)'],
         ['logistics', 'path', 'Delivery routes (L)'],
         ['resources', 'mountains', 'Resource deposits (R)'],
         ['grid', 'grid-four', 'Construction grid (G)'],

@@ -20,7 +20,7 @@ export type BuildingKind =
   | 'lateritepit'
   | 'moat';
 export type Category = 'all' | 'water' | 'production' | 'civic' | 'infrastructure';
-export type Overlay = 'none' | 'water' | 'logistics' | 'resources' | 'grid';
+export type Overlay = 'none' | 'water' | 'flow' | 'elevation' | 'logistics' | 'resources' | 'grid';
 export interface Point {
   x: number;
   y: number;
@@ -100,7 +100,13 @@ export interface TutorialState {
   inspected: boolean;
   delivered: boolean;
 }
+export interface ReservoirHistory {
+  id: string;
+  samples: { tick: number; day: number; depth: number }[];
+}
 export interface GameState {
+  /** Optional in older saves; observed readings begin when that kingdom is opened. */
+  reservoirHistory?: ReservoirHistory[];
   /** Absent in older saves; existing kingdoms opt in through the guide. */
   tutorial?: TutorialState;
   version: 6;

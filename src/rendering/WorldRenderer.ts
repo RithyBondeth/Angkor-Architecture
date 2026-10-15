@@ -1,3 +1,5 @@
+import { dominantFlows } from '../simulation/waterFlow';
+import { elevationRange, elevationColor, waterTileDescription } from '../simulation/WaterPlanning';
 import { isRouteKind } from '../core/buildRoute';
 import type { RoutePreview } from '../core/buildRoute';
 import { Application, Container, Graphics, Sprite, Text } from 'pixi.js';
@@ -23,6 +25,7 @@ export class WorldRenderer {
   private readonly ground = new Container();
   private readonly objects = new Container();
   private readonly routes = new Graphics();
+  private readonly flowArrows = new Graphics();
   private readonly highlight = new Graphics();
   private readonly tutorialMarker = new Graphics();
   private readonly ambience = new Graphics();
@@ -78,6 +81,7 @@ export class WorldRenderer {
       this.ground,
       this.routes,
       this.objects,
+      this.flowArrows,
       this.labels,
       this.ghost,
       this.highlight,
@@ -167,6 +171,7 @@ export class WorldRenderer {
   }
   private sync() {
     const state = this.game.state;
+    this.objects.alpha = this.overlay === 'elevation' ? 0.4 : this.overlay === 'flow' ? 0.7 : 1;
     for (let i = 0; i < state.tiles.length; i++) {
       const t = state.tiles[i]!;
       const sprite = this.tileSprites[i]!;
@@ -187,7 +192,7 @@ export class WorldRenderer {
               : 0x8e9988;
       const channel = ['water', 'reservoir', 'moat', 'canal', 'bridge'].includes(t.terrain);
       const flood = this.waterMarkers[i]!;
-      flood.alpha = channel ? 0 : Math.min(0.6, t.water * 0.55);
+      flood.alpha = this.overlay === 'elevation' || channel ? 0 : Math.min(0.6, t.water * 0.55);
       if (channel && t.water < 0.45) sprite.tint = 0xa7ac7b;
       if (t.terrain === 'forest' && !buildingAt(state, t.x, t.y)) {
         if (!this.treeSprites.has(i)) {
@@ -449,10 +454,10 @@ export class WorldRenderer {
       const b = buildingAt(this.game.state, p.x, p.y);
       this.select(b?.id ?? null);
       this.onSelect(b?.id ?? null);
-      if (this.overlay === 'resources') {
-        const t = tileAt(this.game.state, p.x, p.y);
-        if (t) this.onResource(resourceDescription(t));
-      }
+      const tile = tileAt(this.game.state, p.x, p.y);
+      if (tile && ['water', 'flow', 'elevation'].includes(this.overlay))
+        this.onResource(waterTileDescription(this.game.state, tile));
+      else if (tile && this.overlay === 'resources') this.onResource(resourceDescription(tile));
     }
   }
   private move(x: number, y: number) {
@@ -472,11 +477,13 @@ export class WorldRenderer {
       const b = buildingAt(this.game.state, p.x, p.y);
       const t = tileAt(this.game.state, p.x, p.y);
       this.onHover(
-        this.overlay === 'resources' && t
-          ? resourceDescription(t)
-          : b
-            ? BUILDINGS[b.kind].name
-            : 'Drag to explore • Scroll to zoom',
+        t && ['water', 'flow', 'elevation'].includes(this.overlay)
+          ? waterTileDescription(this.game.state, t)
+          : this.overlay === 'resources' && t
+            ? resourceDescription(t)
+            : b
+              ? BUILDINGS[b.kind].name
+              : 'Drag to explore • Scroll to zoom',
       );
     }
   }
@@ -554,6 +561,51 @@ export class WorldRenderer {
   }
   private drawRoutes() {
     this.routes.clear();
+    this.flowArrows.clear();
+    const state = this.game.state;
+    if (this.overlay === 'elevation') {
+      const range = elevationRange(state);
+      for (const t of state.tiles) {
+        const p = toScreen(t.x, t.y);
+        this.routes
+          .poly([p.x, p.y - 18, p.x + 36, p.y, p.x, p.y + 18, p.x - 36, p.y])
+          .fill({ color: elevationColor(t.elevation, range), alpha: 0.85 });
+      }
+    }
+    if (this.overlay === 'flow') {
+      for (const flow of dominantFlows(state).values()) {
+        const from = state.tiles[flow.from]!,
+          to = state.tiles[flow.to]!;
+        const a = toScreen(from.x, from.y),
+          b = toScreen(to.x, to.y);
+        const dx = b.x - a.x,
+          dy = b.y - a.y;
+        const sx = a.x + dx * 0.12,
+          sy = a.y + dy * 0.12;
+        const ex = a.x + dx * 0.8,
+          ey = a.y + dy * 0.8;
+        const width = 1.5 + Math.min(3, Math.sqrt(flow.amount) * 5);
+        this.flowArrows
+          .moveTo(sx, sy)
+          .lineTo(ex, ey)
+          .stroke({ color: 0x173d56, width: width + 2 });
+        this.flowArrows.moveTo(sx, sy).lineTo(ex, ey).stroke({ color: 0xe1f8ff, width });
+        const length = Math.hypot(dx, dy),
+          ux = dx / length,
+          uy = dy / length;
+        this.flowArrows
+          .poly([
+            ex,
+            ey,
+            ex - ux * 8 - uy * 4,
+            ey - uy * 8 + ux * 4,
+            ex - ux * 8 + uy * 4,
+            ey - uy * 8 - ux * 4,
+          ])
+          .fill(0xe1f8ff)
+          .stroke({ color: 0x173d56, width: 1 });
+      }
+    }
     if (this.overlay === 'resources')
       for (const t of this.game.state.tiles) {
         if (!t.mineral || t.mineral.remaining <= 0) continue;

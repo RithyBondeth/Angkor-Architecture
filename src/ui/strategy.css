@@ -1284,3 +1284,107 @@ dialog > p {
 .game-shell .placement-banner.route-preview small {
   display: block;
 }
+
+.water-planning,
+.reservoir-history {
+  margin: 16px 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.water-planning h3,
+.reservoir-history h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+.water-planning p,
+.reservoir-history p {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.water-tool-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.water-tool-buttons button {
+  padding: 8px;
+  font-size: 12px;
+}
+.water-tool-buttons button.active {
+  border-color: var(--green);
+  background: var(--active-surface);
+  color: var(--active-ink);
+}
+.reservoir-history svg {
+  display: block;
+  width: 100%;
+  color: var(--green);
+}
+.reservoir-history svg line {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.reservoir-history svg text {
+  fill: var(--muted);
+  font:
+    10px 'DM Sans',
+    sans-serif;
+}
+.reservoir-history svg polyline {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+.reservoir-history svg circle {
+  fill: currentColor;
+}
+.reservoir-history summary {
+  cursor: pointer;
+  padding: 8px 0;
+  font-size: 12px;
+}
+.reservoir-history table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.reservoir-history th,
+.reservoir-history td {
+  padding: 8px 4px;
+  text-align: right;
+  border-bottom: 1px solid var(--border);
+}
+.game-shell #overlay-label {
+  max-width: min(420px, calc(100vw - 32px));
+  white-space: normal;
+}
+.game-shell #overlay-label[data-overlay='elevation']::before {
+  content: '';
+  display: inline-block;
+  width: 48px;
+  height: 8px;
+  margin-right: 8px;
+  background: linear-gradient(to right, #2f6491, #efc571);
+}
+@media (max-width: 600px) {
+  .game-shell .map-view-buttons {
+    max-width: calc(100vw - 24px);
+    flex-wrap: wrap;
+  }
+}
+
+.game-shell .map-top-controls {
+  bottom: 272px;
+}
+.game-shell #overlay-label {
+  display: block;
+}
+.game-shell:has(#placement-banner:not([hidden])) #overlay-label {
+  display: none;
+}
+@media (max-width: 600px) {
+  .game-shell .map-top-controls {
+    bottom: 256px;
+  }
+}

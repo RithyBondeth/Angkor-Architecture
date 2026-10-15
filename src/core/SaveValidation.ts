@@ -1,3 +1,4 @@
+import { RESERVOIR_HISTORY_DAYS } from '../simulation/ReservoirHistory';
 import { BUILDINGS } from '../data/buildings';
 import { CONFIG } from '../data/config';
 import { completedBuilding, initialInvestment, registerInfrastructure } from './buildingState';
@@ -132,6 +133,43 @@ function validateShape(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 = 6): bool
         if (occupied.has(key)) return false;
         occupied.add(key);
       }
+  }
+  if (value.reservoirHistory !== undefined) {
+    if (
+      !Array.isArray(value.reservoirHistory) ||
+      value.reservoirHistory.length > Math.floor(s.tiles.length / 16)
+    )
+      return false;
+    const historyIds = new Set<string>();
+    for (const h of value.reservoirHistory) {
+      if (
+        !record(h) ||
+        typeof h.id !== 'string' ||
+        historyIds.has(h.id) ||
+        !s.buildings.some(
+          (b) => b.id === h.id && b.kind === 'baray' && b.construction?.type !== 'build',
+        ) ||
+        !Array.isArray(h.samples) ||
+        h.samples.length > RESERVOIR_HISTORY_DAYS
+      )
+        return false;
+      historyIds.add(h.id);
+      let previousTick = -1,
+        previousDay = 0;
+      for (const sample of h.samples) {
+        if (
+          !record(sample) ||
+          !integer(sample.tick, 0, s.tick) ||
+          !integer(sample.day, 1, s.day) ||
+          sample.tick <= previousTick ||
+          sample.day <= previousDay ||
+          !finite(sample.depth, 0, 1000)
+        )
+          return false;
+        previousTick = sample.tick;
+        previousDay = sample.day;
+      }
+    }
   }
   if (version >= 3 && workforce(s).assigned > workforce(s).total) return false;
   if (!Array.isArray(s.couriers) || s.couriers.length > 36) return false;
