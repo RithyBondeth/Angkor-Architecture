@@ -1,0 +1,107 @@
+dialog:has(.scenario-picker),
+.welcome-dialog:has(.scenario-picker) {
+  width: min(720px, calc(100vw - 24px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+.scenario-picker {
+  border: 0;
+  padding: 0;
+  margin: 20px 0;
+  min-width: 0;
+}
+.scenario-picker legend {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+.scenario-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.scenario-option {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  cursor: pointer;
+}
+.scenario-option:has(input:checked) {
+  background: var(--active-surface);
+  border-color: var(--green);
+}
+.scenario-option:focus-within {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+.scenario-option input {
+  accent-color: var(--green);
+  flex: none;
+  align-self: flex-start;
+  margin: 4px 0 0;
+}
+.scenario-option strong,
+.scenario-option small,
+.scenario-option span span {
+  display: block;
+}
+.scenario-option strong {
+  font-size: 14px;
+  line-height: 1.4;
+}
+.scenario-option small {
+  margin: 8px 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--green);
+}
+.scenario-option span span,
+.scenario-details p,
+.scenario-details li {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.scenario-details {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+  margin-bottom: 20px;
+}
+.scenario-details h3 {
+  margin: 0;
+  font-size: 20px;
+}
+.scenario-details h4 {
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+.scenario-details ul {
+  padding-left: 20px;
+}
+.scenario-supplies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+}
+.scenario-supplies dt {
+  display: flex;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.scenario-supplies dd {
+  margin: 4px 0 0;
+  font-weight: 700;
+}
+@media (max-width: 600px) {
+  .scenario-options {
+    grid-template-columns: 1fr;
+  }
+  dialog:has(.scenario-picker),
+  .welcome-dialog:has(.scenario-picker) {
+    padding: 24px 16px;
+  }
+}

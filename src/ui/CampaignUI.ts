@@ -1,5 +1,6 @@
 import { BUILDINGS, RESOURCE_INFO } from '../data/buildings';
-import { COMMISSIONS, UNLOCKS } from '../data/progression';
+import { commissionsFor, scenarioFor } from '../data/scenarios';
+import { UNLOCKS } from '../data/progression';
 import { activeCommission, earnedMerit, templeUpgradeMerit } from '../core/progressionState';
 import type { Building, CampaignGoal, GameState, Resource, RoyalCommission } from '../core/types';
 import { goalValue } from '../simulation/Progression';
@@ -27,9 +28,9 @@ function goalRow(state: GameState, goal: CampaignGoal) {
 export function commissionOverview(state: GameState): string {
   const active = activeCommission(state);
   if (!active)
-    return `<div class="panel-eyebrow">Campaign complete ${icon('crown')}</div><h2>An enduring legacy.</h2><p class="panel-subtitle">All five royal commissions are fulfilled. Continue shaping your kingdom in free play.</p><button class="secondary-button full-width" data-action="panel" data-panel="campaign">Review your campaign ${icon('arrow-up-right')}</button>`;
+    return `<div class="panel-eyebrow">Campaign complete ${icon('crown')}</div><h2>An enduring legacy.</h2><p class="panel-subtitle">All royal commissions for ${scenarioFor(state).name} are fulfilled. Continue shaping your kingdom in free play.</p><button class="secondary-button full-width" data-action="panel" data-panel="campaign">Review your campaign ${icon('arrow-up-right')}</button>`;
   const completed = active.goals.filter((g) => goalValue(state, g) >= g.target).length;
-  return `<div class="panel-eyebrow">Royal commission ${state.progression.claimed.length + 1} / ${COMMISSIONS.length} ${icon('flag-pennant')}</div><h2>${active.title}</h2><p class="panel-subtitle">${active.description}</p><div class="commission-progress"><span>${completed} of ${active.goals.length} objectives</span><strong>${Math.round((completed / active.goals.length) * 100)}%</strong></div><div class="milestone-track">${active.goals.map((g) => `<span class="${goalValue(state, g) >= g.target ? 'done' : ''}"></span>`).join('')}</div><div class="objectives">${active.goals.map((g) => goalRow(state, g)).join('')}</div><div class="commission-reward"><span>${icon('sparkle')}Royal reward</span><strong>${rewards(active)}</strong></div><p class="campaign-note">Rewards are granted while the simulation runs once all objectives are met. Building goals count completed projects; current city conditions can change.</p><button class="secondary-button full-width" data-action="panel" data-panel="campaign">View the full campaign ${icon('arrow-up-right')}</button>`;
+  return `<div class="panel-eyebrow">Royal commission ${state.progression.claimed.length + 1} / ${commissionsFor(state).length} ${icon('flag-pennant')}</div><h2>${active.title}</h2><p class="panel-subtitle">${active.description}</p><div class="commission-progress"><span>${completed} of ${active.goals.length} objectives</span><strong>${Math.round((completed / active.goals.length) * 100)}%</strong></div><div class="milestone-track">${active.goals.map((g) => `<span class="${goalValue(state, g) >= g.target ? 'done' : ''}"></span>`).join('')}</div><div class="objectives">${active.goals.map((g) => goalRow(state, g)).join('')}</div><div class="commission-reward"><span>${icon('sparkle')}Royal reward</span><strong>${rewards(active)}</strong></div><p class="campaign-note">Rewards are granted while the simulation runs once all objectives are met. Building goals count completed projects; current city conditions can change.</p><button class="secondary-button full-width" data-action="panel" data-panel="campaign">View the full campaign ${icon('arrow-up-right')}</button>`;
 }
 export function unlockPanel(state: GameState): string {
   const merit = earnedMerit(state);
@@ -37,15 +38,17 @@ export function unlockPanel(state: GameState): string {
   return `<section class="unlock-list" aria-label="Merit unlocks"><h3 class="resilience-heading">Merit unlocks <span>${number(merit)} earned</span></h3>${next ? `<p class="campaign-note">${number(next.merit - merit)} more merit to unlock ${next.name.toLowerCase()}. Temples and commissions earn merit.</p>` : '<p class="campaign-note">Every era unlock is available.</p>'}${UNLOCKS.map((u) => `<div class="unlock-row ${merit >= u.merit ? 'unlocked' : ''}">${icon(merit >= u.merit ? 'lock-open' : 'lock')}<span><strong>${u.name}</strong><small>${u.description}</small></span><b>${u.merit}<small>merit</small></b></div>`).join('')}<p class="campaign-note">Unlocks are permanent. Existing buildings and projects remain usable.</p></section>`;
 }
 export function campaignPanel(state: GameState): string {
-  return `<div class="panel-eyebrow">The royal campaign ${icon('flag-pennant')}</div><h2>A kingdom in chapters.</h2><p class="panel-subtitle">${state.progression.claimed.length} of ${COMMISSIONS.length} commissions fulfilled.</p><div class="campaign-roadmap">${COMMISSIONS.map(
-    (c, i) => {
+  return `<div class="panel-eyebrow">The royal campaign ${icon('flag-pennant')}</div><h2>${scenarioFor(state).region} in chapters.</h2><p class="panel-subtitle">${state.progression.claimed.length} of ${commissionsFor(state).length} commissions fulfilled.</p><div class="campaign-roadmap">${commissionsFor(
+    state,
+  )
+    .map((c, i) => {
       const complete = i < state.progression.claimed.length,
         active = i === state.progression.claimed.length;
       return `<details data-commission-id="${c.id}" class="campaign-chapter ${complete ? 'complete' : active ? 'current' : ''}" ${active ? 'open' : ''}><summary><span class="chapter-number">${complete ? icon('check') : i + 1}</span><span><strong>${c.title}</strong><small>${complete ? 'Reward awarded' : active ? 'Current commission' : 'Complete the previous chapter'}</small></span>${icon('caret-down')}</summary><p class="campaign-note">${c.description}</p>${active ? `<div class="objectives">${c.goals.map((g) => goalRow(state, g)).join('')}</div>` : `<ul class="chapter-requirements">${c.goals.map((g) => `<li>${g.label}<small>${g.hint}</small></li>`).join('')}</ul>`}<p class="chapter-reward">${icon('sparkle')}${rewards(c)}</p></details>`;
-    },
-  ).join(
-    '',
-  )}</div>${state.progression.claimed.length === COMMISSIONS.length ? '<p class="campaign-victory">Campaign complete. Your kingdom continues in free play.</p>' : '<p class="campaign-note">Consecutive-day objectives begin in their chapter and reset if conditions lapse. Delivery totals accumulate from the start of this campaign.</p>'}${unlockPanel(state)}`;
+    })
+    .join(
+      '',
+    )}</div>${state.progression.claimed.length === commissionsFor(state).length ? '<p class="campaign-victory">Campaign complete. Your kingdom continues in free play.</p>' : '<p class="campaign-note">Consecutive-day objectives begin in their chapter and reset if conditions lapse. Delivery totals accumulate from the start of this campaign.</p>'}${unlockPanel(state)}`;
 }
 export function templeUpgradeButton(b: Building, state: GameState): string {
   if (b.level >= 3 || b.condition < 100) return '';

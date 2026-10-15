@@ -1,5 +1,6 @@
 import { CONFIG } from '../data/config';
-import { COMMISSIONS, UNLOCKS } from '../data/progression';
+import { commissionsFor } from '../data/scenarios';
+import { UNLOCKS } from '../data/progression';
 import { activeCommission, earnedMerit } from '../core/progressionState';
 import { SeasonManager } from '../core/SeasonManager';
 import type { CampaignGoal, ChronicleEntry, GameState, Resource } from '../core/types';
@@ -81,10 +82,10 @@ export class Progression {
         text: 'Royal commission complete. The sovereign has granted your reward.',
         icon: 'seal-check',
       });
-      if (p.claimed.length === COMMISSIONS.length)
+      if (p.claimed.length === commissionsFor(state).length)
         events.push({
           title: 'An enduring legacy',
-          text: 'All five royal commissions are complete. Your temple city has fulfilled the campaign. Continue building your kingdom in free play.',
+          text: 'All royal commissions for this scenario are complete. Your temple city has fulfilled the campaign. Continue building your kingdom in free play.',
           icon: 'crown',
         });
     }
