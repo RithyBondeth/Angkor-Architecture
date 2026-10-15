@@ -22,6 +22,7 @@ export class WorldRenderer {
   private readonly objects = new Container();
   private readonly routes = new Graphics();
   private readonly highlight = new Graphics();
+  private readonly tutorialMarker = new Graphics();
   private readonly ambience = new Graphics();
   private readonly ghost = new Sprite();
   private readonly tileSprites: Sprite[] = [];
@@ -42,7 +43,7 @@ export class WorldRenderer {
   private readonly reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   onPreview: (message: string, ok: boolean) => void = () => {};
   onResource: (message: string) => void = () => {};
-  onSelect: (id: string | null) => void = () => {};
+  onSelect: (id: string | null, placed?: boolean) => void = () => {};
   onPlace: (message: string, ok: boolean) => void = () => {};
   onHover: (message: string) => void = () => {};
   onZoom: (zoom: number) => void = () => {};
@@ -75,6 +76,7 @@ export class WorldRenderer {
       this.labels,
       this.ghost,
       this.highlight,
+      this.tutorialMarker,
     );
     this.objects.sortableChildren = true;
     this.app.stage.addChild(this.world, this.ambience);
@@ -356,7 +358,21 @@ export class WorldRenderer {
     this.selected = id;
     this.sync();
   }
+  guideSite(site: (Point & { kind: BuildingKind }) | null) {
+    this.tutorialMarker.clear();
+    if (!site) return;
+    this.hover = site;
+    this.drawHighlight();
+    for (const cell of footprint(site)) {
+      const p = toScreen(cell.x, cell.y);
+      this.tutorialMarker
+        .poly([p.x, p.y - 18, p.x + 36, p.y, p.x, p.y + 18, p.x - 36, p.y])
+        .fill({ color: 0xffd66b, alpha: 0.25 })
+        .stroke({ color: 0xffd66b, width: 3 });
+    }
+  }
   setPlacement(kind: BuildingKind | null) {
+    this.guideSite(null);
     this.placement = kind;
     this.host.classList.toggle('placing', !!kind);
     this.drawHighlight();
@@ -385,7 +401,7 @@ export class WorldRenderer {
       if (result.ok) {
         const b = buildingAt(this.game.state, p.x, p.y);
         this.select(b?.id ?? null);
-        this.onSelect(b?.id ?? null);
+        this.onSelect(b?.id ?? null, true);
       }
     } else {
       const b = buildingAt(this.game.state, p.x, p.y);

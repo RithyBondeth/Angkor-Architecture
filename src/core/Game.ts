@@ -1,3 +1,4 @@
+import { advanceTutorial } from './tutorialState';
 import { BUILDINGS } from '../data/buildings';
 import {
   freshEngineering,
@@ -44,6 +45,7 @@ export class Game {
     return () => this.listeners.delete(listener);
   }
   notify() {
+    advanceTutorial(this.state);
     for (const listener of this.listeners) listener();
   }
   step() {
@@ -211,6 +213,13 @@ export class Game {
     this.pay(def.cost);
     if (underlay) this.state.buildings = this.state.buildings.filter((b) => b.id !== underlay.id);
     this.state.buildings.push(building);
+    const tutorial = this.state.tutorial;
+    if (tutorial?.status === 'active') {
+      if (tutorial.step === 1 && kind === 'canal' && !tutorial.canalId)
+        tutorial.canalId = building.id;
+      if (tutorial.step === 2 && kind === 'paddy' && !tutorial.paddyId)
+        tutorial.paddyId = building.id;
+    }
     this.log(
       `${def.name} planned`,
       building.construction!.builders

@@ -92,7 +92,17 @@ export interface ChronicleEntry {
   text: string;
   icon: string;
 }
+export interface TutorialState {
+  status: 'active' | 'skipped' | 'completed';
+  step: number;
+  canalId: string | null;
+  paddyId: string | null;
+  inspected: boolean;
+  delivered: boolean;
+}
 export interface GameState {
+  /** Absent in older saves; existing kingdoms opt in through the guide. */
+  tutorial?: TutorialState;
   version: 6;
   seed: number;
   width: number;

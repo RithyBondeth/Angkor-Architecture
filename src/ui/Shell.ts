@@ -4,6 +4,7 @@ import { icon } from './icons';
 import { angkorEmblem } from './emblem';
 
 const VIEWS = [
+  ['tutorial', 'book-open-text', 'Interactive tutorial'],
   ['overview', 'squares-four', 'Kingdom overview'],
   ['water', 'waves', 'Water management'],
   ['workforce', 'users-three', 'People & logistics'],

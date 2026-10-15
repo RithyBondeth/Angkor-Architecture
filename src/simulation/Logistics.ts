@@ -50,6 +50,13 @@ export class Logistics {
         );
         state.resources[c.resource] += received;
         recordReceipt(state, c.resource, received);
+        if (
+          state.tutorial?.status === 'active' &&
+          c.sourceId === state.tutorial.paddyId &&
+          c.resource === 'rice' &&
+          received > 0
+        )
+          state.tutorial.delivered = true;
         state.progression.delivered[c.resource] = Math.min(
           1e8,
           (state.progression.delivered[c.resource] ?? 0) + received,

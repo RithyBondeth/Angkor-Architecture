@@ -24,6 +24,21 @@ const record = (n: unknown): n is Record<string, unknown> =>
 function validateShape(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 = 6): boolean {
   if (!record(value)) return false;
   const s = value as unknown as GameState;
+  if (value.tutorial !== undefined) {
+    const t = value.tutorial;
+    const siteId = (id: unknown) => id === null || (typeof id === 'string' && /^b\d+$/.test(id));
+    if (
+      !record(t) ||
+      !['active', 'skipped', 'completed'].includes(t.status as string) ||
+      !integer(t.step, 0, 6) ||
+      !siteId(t.canalId) ||
+      !siteId(t.paddyId) ||
+      typeof t.inspected !== 'boolean' ||
+      typeof t.delivered !== 'boolean' ||
+      (t.status === 'completed' ? t.step !== 6 : t.step === 6)
+    )
+      return false;
+  }
   if (
     value.version !== version ||
     !integer(s.width, 8, 64) ||
