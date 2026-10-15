@@ -1,3 +1,5 @@
+import { isRouteKind } from '../core/buildRoute';
+import type { RoutePreview } from '../core/buildRoute';
 import { Application, Container, Graphics, Sprite, Text } from 'pixi.js';
 import { moatRing, templeBlocked } from '../simulation/TempleEngineering';
 import { BUILDINGS } from '../data/buildings';
@@ -37,10 +39,13 @@ export class WorldRenderer {
   private selected: string | null = null;
   private placement: BuildingKind | null = null;
   private hover: Point | null = null;
+  private routeStart: Point | null = null;
+  private routeEnd: Point | null = null;
   private overlay: Overlay = 'none';
   private resizeObserver!: ResizeObserver;
   private unsubscribe?: () => void;
   private readonly reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  onRoutePreview: (preview: RoutePreview | null) => void = () => {};
   onPreview: (message: string, ok: boolean) => void = () => {};
   onResource: (message: string) => void = () => {};
   onSelect: (id: string | null, placed?: boolean) => void = () => {};
@@ -103,6 +108,36 @@ export class WorldRenderer {
       (x, y) => this.click(x, y),
       (x, y) => this.move(x, y),
       (zoom) => this.onZoom(zoom),
+      {
+        start: (x, y) => {
+          if (!isRouteKind(this.placement) || this.demolition) return false;
+          this.routeStart = this.routeEnd = this.point(x, y);
+          this.guideSite(null);
+          this.drawHighlight();
+          return true;
+        },
+        move: (x, y) => {
+          this.hover = this.routeEnd = this.point(x, y);
+          this.drawHighlight();
+        },
+        end: (x, y) => {
+          const start = this.routeStart;
+          const kind = this.placement;
+          const end = this.point(x, y);
+          this.hover = end;
+          this.cancelRoute();
+          if (!start || !isRouteKind(kind)) return;
+          const result = this.game.placeRoute(kind, start, end);
+          this.onPlace(result.message, result.ok);
+          if (result.ok && start.x === end.x && start.y === end.y) {
+            const b = buildingAt(this.game.state, start.x, start.y);
+            this.select(b?.id ?? null);
+            this.onSelect(b?.id ?? null, true);
+          }
+          this.drawHighlight();
+        },
+        cancel: () => this.cancelRoute(),
+      },
     );
     this.camera.reset();
     this.resizeObserver = new ResizeObserver(() => {
@@ -371,13 +406,20 @@ export class WorldRenderer {
         .stroke({ color: 0xffd66b, width: 3 });
     }
   }
+  private cancelRoute() {
+    this.routeStart = this.routeEnd = null;
+    this.onRoutePreview(null);
+    this.drawHighlight();
+  }
   setPlacement(kind: BuildingKind | null) {
+    this.camera.cancelGesture();
     this.guideSite(null);
     this.placement = kind;
     this.host.classList.toggle('placing', !!kind);
     this.drawHighlight();
   }
   setDemolition(active: boolean) {
+    this.camera.cancelGesture();
     this.demolition = active;
     this.host.classList.toggle('demolishing', active);
     this.drawHighlight();
@@ -441,6 +483,24 @@ export class WorldRenderer {
   private drawHighlight() {
     this.highlight.clear();
     this.ghost.visible = false;
+    if (this.routeStart && this.routeEnd && isRouteKind(this.placement)) {
+      const preview = this.game.previewRoute(this.placement, this.routeStart, this.routeEnd);
+      for (const { point, status } of preview.cells) {
+        const p = toScreen(point.x, point.y);
+        const color =
+          status === 'existing'
+            ? 0x8bd5eb
+            : status === 'blocked' || !preview.ok
+              ? 0xe47c60
+              : 0xf2dfab;
+        this.highlight
+          .poly([p.x, p.y - 18, p.x + 36, p.y, p.x, p.y + 18, p.x - 36, p.y])
+          .fill({ color, alpha: 0.35 })
+          .stroke({ color, width: 2 });
+      }
+      this.onRoutePreview(preview);
+      return;
+    }
     const selected = this.game.state.buildings.find((b) => b.id === this.selected);
     const origin =
       this.demolition && this.hover

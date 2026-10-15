@@ -53,7 +53,7 @@ npm run preview    # Serve the production build
 
 The welcome screen offers **Play**, **Continue**, and **Settings**. Play starts a new settlement and asks before replacing an existing kingdom. Continue restores the newest valid local save and shows its day and population; it stays disabled when no valid save exists. Settings lets you choose the evening colors before entering the game, and How to play introduces water, food, and royal commissions. The simulation and autosave begin only after you choose Play or Continue.
 
-Select a building from the bottom tray, then click a valid site to plan it. Drag the map to pan; scroll to zoom. Materials are reserved immediately, and builders complete the project over simulation ticks. Click a site to change its crew, pause or resume work, or review a cancellation refund. The Construction view lists all active projects and the available workforce.
+Select a building from the bottom tray, then click a valid site to plan it. For roads and canals, press and drag to preview a connected L-shaped route (longer grid axis first, X first on ties); release to build. The preview lists the total material cost and the number of new and existing matching tiles. Existing roads/canals and their projects are retained without another charge. Blocked or unaffordable routes spend nothing. Escape or Cancel discards the drag; zooming, opening a dialog, or losing pointer capture also cancels it. While these tools are selected, use middle-drag or arrow keys to pan; tap/click still plans one tile. Drag the map to pan; scroll to zoom. Materials are reserved immediately, and builders complete the project over simulation ticks. Click a site to change its crew, pause or resume work, or review a cancellation refund. The Construction view lists all active projects and the available workforce.
 
 Completed buildings can be inspected, paused, upgraded, or removed. The trash tool (`X`) lets you select a structure on the map and review its refund before removal. Demolition confirmation pauses the simulation so its preview stays accurate; closing the dialog restores the previous speed.
 
@@ -76,16 +76,17 @@ Completed buildings can be inspected, paused, upgraded, or removed. The trash to
 - **Merit unlocks:** At 200 merit, the Great barays era unlocks the royal granary. A staffed, completed granary reduces daily rice needs by up to 25%. At 600 merit, the Temple city era unlocks the architect’s workshop and final temple stage. A staffed workshop increases builder work by up to 20%, including repairs and temple upgrades. Damage reduces support benefits; paused, ruined, unstaffed, or unfinished support buildings provide no benefit. Multiple copies use the strongest active benefit and do not stack. Earlier temple stages and basic infrastructure remain available from the start. Existing buildings and projects keep working.
 - **Permanent progression:** Era unlocks use the highest merit reached, so they remain available if the current balance falls. Commission rewards can be earned only once. Delivery objectives count actual rice or sandstone received from couriers, up to available storage space; starting resources, refunds, returned shipments, and rewards do not count. After all five chapters, the city continues in free play.
 
-| Controls              | Action                                             |
-| --------------------- | -------------------------------------------------- |
-| Drag / arrow keys     | Pan the camera                                     |
-| Scroll / `+` / `-`    | Zoom                                               |
-| `Space`               | Pause or resume                                    |
-| `1` to `6`            | Select the first six buildings                     |
-| `Escape`              | Cancel placement                                   |
-| `X`                   | Toggle demolition tool                             |
-| `W` / `L` / `R` / `G` | Water / delivery / deposits / construction overlay |
-| `H` / `?`             | Builder’s guide                                    |
+| Controls                    | Action                                             |
+| --------------------------- | -------------------------------------------------- |
+| Drag / middle-drag / arrows | Pan (primary drag builds selected roads/canals)    |
+| Road/canal drag             | Preview route and total cost; release to build     |
+| Scroll / `+` / `-`          | Zoom                                               |
+| `Space`                     | Pause or resume                                    |
+| `1` to `6`                  | Select the first six buildings                     |
+| `Escape`                    | Cancel placement                                   |
+| `X`                         | Toggle demolition tool                             |
+| `W` / `L` / `R` / `G`       | Water / delivery / deposits / construction overlay |
+| `H` / `?`                   | Builder’s guide                                    |
 
 The speed controls run the simulation at 1×, 2×, or 4×. A day lasts six fixed simulation ticks; wet and dry seasons last 90 days each.
 
