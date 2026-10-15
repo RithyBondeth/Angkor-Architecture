@@ -127,10 +127,33 @@ describe('storage and transport', () => {
     cargo.path = [{ x: 1, y: 1 }];
     cargo.targetId = destination.id;
     s.tick = 11;
-    new Logistics().step(s);
+    expect(new Logistics().step(s)).toEqual([
+      { type: 'delivery', resource: 'rice', amount: 1.5, mode: 'worker' },
+    ]);
     expect(s.resources.rice).toBe(1200);
     expect(s.progression.delivered.rice).toBe(1.5);
     expect(validateState(s)).toBe(true);
+  });
+  it('keeps returned and blocked cargo silent, and emits only on arrival', () => {
+    const s = world(),
+      source = add(s, 'paddy', 8, 8),
+      destination = add(s, 'house', 1, 1);
+    s.resources.rice = 100;
+    source.stock = 20;
+    source.crop = { stress: 100, failed: true };
+    s.tick = 10;
+    const logistics = new Logistics();
+    expect(logistics.step(s)).toEqual([]);
+    expect(s.couriers).toHaveLength(1);
+    const cargo = structuredClone(s.couriers[0]!);
+    s.couriers[0]!.path = [{ x: 1, y: 1 }];
+    s.resources.rice = 1200;
+    s.tick = 11;
+    expect(logistics.step(s)).toEqual([]);
+    s.resources.rice = 100;
+    s.couriers = [{ ...cargo, path: [{ x: 1, y: 1 }] }];
+    destination.enabled = false;
+    expect(logistics.step(s)).toEqual([]);
   });
   it('limits active carts and rotates dispatch priority when they free up', () => {
     const s = world();

@@ -8,6 +8,7 @@ import '@fontsource/cormorant-garamond/500.css';
 import '@fontsource/cormorant-garamond/600.css';
 import '@phosphor-icons/web/regular/style.css';
 import './ui/styles.css';
+import { AudioController } from './audio/AudioController';
 import { Game } from './core/Game';
 import { GameLoop } from './core/GameLoop';
 import { Persistence } from './core/Persistence';
@@ -22,18 +23,26 @@ async function main() {
   applyTheme();
   const root = document.querySelector<HTMLElement>('#app')!;
   const persistence = new Persistence();
-  const choice = await showWelcome(root, persistence.load());
+  const audio = new AudioController(root);
+  const choice = await showWelcome(root, persistence.load(), audio);
   createShell(root);
   const game = new Game(choice.state);
   const renderer = new WorldRenderer(game, document.querySelector<HTMLElement>('#world')!);
   await renderer.init();
   document.querySelector('.world-loading')?.remove();
-  const hud = new HUD(game, renderer, persistence, async (scenario) => {
-    const fresh = createScenario(scenario);
-    await persistence.save(fresh);
-    game.state = fresh;
-    location.reload();
-  });
+  audio.attach(game);
+  const hud = new HUD(
+    game,
+    renderer,
+    persistence,
+    async (scenario) => {
+      const fresh = createScenario(scenario);
+      await persistence.save(fresh);
+      game.state = fresh;
+      location.reload();
+    },
+    audio,
+  );
   const loop = new GameLoop(game, (interpolation, elapsed) =>
     renderer.render(interpolation, elapsed),
   );
@@ -53,6 +62,7 @@ async function main() {
       clearInterval(autosave);
       loop.stop();
       hud.destroy();
+      audio.destroy();
       renderer.destroy();
       window.removeEventListener('pagehide', backup);
       document.removeEventListener('visibilitychange', onVisibility);

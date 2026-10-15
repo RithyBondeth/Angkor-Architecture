@@ -1,3 +1,4 @@
+import type { GameEvent } from './gameEvents';
 import { recordReservoirHistory } from '../simulation/ReservoirHistory';
 import { orthogonalRoute } from './buildRoute';
 import type { RouteKind, RoutePreview } from './buildRoute';
@@ -42,12 +43,20 @@ export class Game {
   private readonly survival = new Survival();
   private readonly progression = new Progression();
   private readonly listeners = new Set<() => void>();
+  private readonly eventListeners = new Set<(event: GameEvent) => void>();
   constructor(public state: GameState) {
     recordReservoirHistory(state);
   }
   subscribe(listener: () => void) {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+  onEvent(listener: (event: GameEvent) => void) {
+    this.eventListeners.add(listener);
+    return () => this.eventListeners.delete(listener);
+  }
+  private emit(event: GameEvent) {
+    for (const listener of this.eventListeners) listener(event);
   }
   notify() {
     recordReservoirHistory(this.state);
@@ -67,7 +76,7 @@ export class Game {
         `${BUILDINGS[b.kind].name} is ready to serve your city.`,
         'hammer',
       );
-    this.logistics.step(this.state);
+    for (const arrival of this.logistics.step(this.state)) this.emit(arrival);
     for (const e of this.survival.food(this.state)) this.log(e.title, e.text, e.icon);
     if (oldSeason !== SeasonManager.at(this.state.day).wet) {
       const season = SeasonManager.at(this.state.day);
@@ -197,6 +206,7 @@ export class Game {
     const result = this.canPlace(kind, p);
     if (!result.ok) return result;
     this.startBuilding(kind, p);
+    this.emit({ type: 'placement', kind, count: 1 });
     this.notify();
     return {
       ok: true,
@@ -261,6 +271,7 @@ export class Game {
     if (!preview.ok) return preview;
     for (const cell of preview.cells)
       if (cell.status === 'new') this.startBuilding(kind, cell.point);
+    this.emit({ type: 'placement', kind, count: preview.newTiles });
     this.log(
       'Route planned',
       `${preview.newTiles} ${kind === 'road' ? 'road' : 'canal'} projects started; ${preview.existingTiles} existing tiles retained.`,
