@@ -11,7 +11,7 @@ import './ui/styles.css';
 import { Game } from './core/Game';
 import { GameLoop } from './core/GameLoop';
 import { Persistence } from './core/Persistence';
-import { createWorld } from './core/world';
+import { createScenario } from './core/world';
 import { CONFIG } from './data/config';
 import { WorldRenderer } from './rendering/WorldRenderer';
 import { applyTheme, createShell, HUD } from './ui/HUD';
@@ -22,14 +22,14 @@ async function main() {
   applyTheme();
   const root = document.querySelector<HTMLElement>('#app')!;
   const persistence = new Persistence();
-  const saved = await showWelcome(root, persistence.load());
+  const choice = await showWelcome(root, persistence.load());
   createShell(root);
-  const game = new Game(saved ?? createWorld());
+  const game = new Game(choice.state);
   const renderer = new WorldRenderer(game, document.querySelector<HTMLElement>('#world')!);
   await renderer.init();
   document.querySelector('.world-loading')?.remove();
-  const hud = new HUD(game, renderer, persistence, async () => {
-    const fresh = createWorld();
+  const hud = new HUD(game, renderer, persistence, async (scenario) => {
+    const fresh = createScenario(scenario);
     await persistence.save(fresh);
     game.state = fresh;
     location.reload();
@@ -47,7 +47,7 @@ async function main() {
     if (document.hidden) backup();
   };
   document.addEventListener('visibilitychange', onVisibility);
-  if (saved) document.querySelector('#save-status')!.textContent = 'Kingdom restored';
+  if (choice.restored) document.querySelector('#save-status')!.textContent = 'Kingdom restored';
   if (import.meta.hot)
     import.meta.hot.dispose(() => {
       clearInterval(autosave);

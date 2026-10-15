@@ -1,3 +1,4 @@
+export type ScenarioId = 'roluos' | 'floodplain' | 'foothills';
 export type Resource = 'rice' | 'wood' | 'sandstone' | 'laterite' | 'merit';
 export type Resources = Record<Resource, number>;
 export type Terrain =
@@ -105,6 +106,8 @@ export interface ReservoirHistory {
   samples: { tick: number; day: number; depth: number }[];
 }
 export interface GameState {
+  /** Missing in older saves means the original Roluos campaign. */
+  scenario?: ScenarioId;
   /** Optional in older saves; observed readings begin when that kingdom is opened. */
   reservoirHistory?: ReservoirHistory[];
   /** Absent in older saves; existing kingdoms opt in through the guide. */

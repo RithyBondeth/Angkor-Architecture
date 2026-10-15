@@ -6,7 +6,7 @@ import { footprint } from './world';
 import { workforce } from '../simulation/Workforce';
 import { freshSurvival } from './survivalState';
 import { freshProgression } from './progressionState';
-import { COMMISSIONS } from '../data/progression';
+import { commissionsFor, isScenarioId } from '../data/scenarios';
 import { freshEngineering, RELIEF_TARGET } from '../simulation/TempleEngineering';
 import { seedDeposits } from '../simulation/Deposits';
 import { DELIVERY_ISSUES } from './types';
@@ -25,6 +25,7 @@ const record = (n: unknown): n is Record<string, unknown> =>
 function validateShape(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 = 6): boolean {
   if (!record(value)) return false;
   const s = value as unknown as GameState;
+  if (value.scenario !== undefined && !isScenarioId(value.scenario)) return false;
   if (value.tutorial !== undefined) {
     const t = value.tutorial;
     const siteId = (id: unknown) => id === null || (typeof id === 'string' && /^b\d+$/.test(id));
@@ -237,19 +238,20 @@ function validateShape(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 = 6): bool
 
 function validProgression(s: GameState): boolean {
   const p = s.progression;
+  const commissions = commissionsFor(s);
   if (
     !record(p) ||
     !finite(p.meritPeak, 0, CONFIG.maxResource) ||
     !Array.isArray(p.claimed) ||
-    p.claimed.length > COMMISSIONS.length ||
-    !p.claimed.every((id, index) => id === COMMISSIONS[index]!.id) ||
+    p.claimed.length > commissions.length ||
+    !p.claimed.every((id, index) => id === commissions[index]!.id) ||
     !record(p.delivered) ||
     !Object.entries(p.delivered).every(([r, n]) => resources.includes(r) && finite(n)) ||
     !integer(p.lastDayTick, 0, s.tick) ||
     !integer(p.streakDays, 0, 7)
   )
     return false;
-  const goal = COMMISSIONS[p.claimed.length]?.goals.find((g) => g.type === 'sustain');
+  const goal = commissions[p.claimed.length]?.goals.find((g) => g.type === 'sustain');
   return goal ? p.streakDays <= goal.target : p.streakDays === 0;
 }
 

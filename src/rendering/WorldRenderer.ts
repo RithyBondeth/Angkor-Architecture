@@ -1,3 +1,4 @@
+import { scenarioFor } from '../data/scenarios';
 import { dominantFlows } from '../simulation/waterFlow';
 import { elevationRange, elevationColor, waterTileDescription } from '../simulation/WaterPlanning';
 import { isRouteKind } from '../core/buildRoute';
@@ -105,7 +106,7 @@ export class WorldRenderer {
     }
     this.addLabel('ROYAL BARAY', 8.5, 8.5, 76);
     this.addLabel('PRASAT SANCTUARY', 17.5, 14.5, 112);
-    this.addLabel('TONLÉ SAP', 28, 20, 0);
+    this.addLabel(scenarioFor(this.game.state).waterName, 28, 20, 0);
     this.camera = new Camera(
       this.world,
       this.host,

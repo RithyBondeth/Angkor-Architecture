@@ -1,3 +1,5 @@
+import { scenarioFor } from '../data/scenarios';
+import { scenarioPicker, selectedScenario, updateScenarioDetails } from './ScenarioSelection';
 import { waterPlanningTools, reservoirHistoryChart, reservoirList } from './WaterPlanningUI';
 import { isRouteKind } from '../core/buildRoute';
 import { freshTutorial, inspectTutorialSite } from '../core/tutorialState';
@@ -20,7 +22,14 @@ import { toScreen } from '../rendering/isometric';
 import type { Game } from '../core/Game';
 import type { Persistence } from '../core/Persistence';
 import type { WorldRenderer } from '../rendering/WorldRenderer';
-import type { BuildingKind, Category, GameState, Overlay, Resource } from '../core/types';
+import type {
+  BuildingKind,
+  Category,
+  GameState,
+  Overlay,
+  Resource,
+  ScenarioId,
+} from '../core/types';
 import { escapeHtml as esc, icon } from './icons';
 import { constructionDetails, constructionPanel, removalDialog } from './ConstructionUI';
 import {
@@ -78,7 +87,7 @@ export class HUD {
     private readonly game: Game,
     private readonly renderer: WorldRenderer,
     private readonly persistence: Persistence,
-    private readonly reset: () => Promise<void>,
+    private readonly reset: (scenario: ScenarioId) => Promise<void>,
   ) {
     this.root = document.querySelector('#app')!;
     if (game.state.speed > 0) this.lastSpeed = game.state.speed as 1 | 2 | 4;
@@ -145,6 +154,14 @@ export class HUD {
   }
   private bindEvents() {
     const options = { signal: this.abort.signal };
+    this.root.addEventListener(
+      'change',
+      (event) => {
+        if ((event.target as HTMLInputElement).name === 'scenario')
+          updateScenarioDetails(this.root);
+      },
+      options,
+    );
     this.root.addEventListener(
       'click',
       (e) => {
@@ -307,12 +324,15 @@ export class HUD {
           setTimeout(() => URL.revokeObjectURL(url), 1000);
         }
         if (action === 'import') this.root.querySelector<HTMLInputElement>('#import-file')!.click();
-        if (action === 'reset')
-          this.root.querySelector<HTMLElement>('#reset-confirm')!.hidden = false;
-        if (action === 'cancel-reset')
-          this.root.querySelector<HTMLElement>('#reset-confirm')!.hidden = true;
-        if (action === 'confirm-reset')
-          void this.reset().catch(() => this.toast('The new settlement could not be saved.', true));
+        if (action === 'reset') this.openScenarioPicker();
+        if (action === 'confirm-scenario') {
+          const dialog = this.root.querySelector<HTMLDialogElement>('dialog')!;
+          button.setAttribute('disabled', '');
+          void this.reset(selectedScenario(dialog)).catch(() => {
+            button.removeAttribute('disabled');
+            this.toast('The new settlement could not be saved.', true);
+          });
+        }
       },
       options,
     );
@@ -713,6 +733,7 @@ export class HUD {
       state.survival.hunger > 0
         ? `${Math.round(productivity(state) * 100)}% productive`
         : `${Math.floor(state.happiness)}% content`;
+    this.root.querySelector('#region-name')!.textContent = scenarioFor(state).region;
     this.root.querySelector('#game-date')!.textContent = `${season.year} CE`;
     this.root.querySelector('#game-day')!.textContent = `Day ${state.day}`;
     this.root.querySelector('#season-name')!.textContent = season.name;
@@ -839,7 +860,7 @@ export class HUD {
           .slice(0, 7)
           .map(
             (e) =>
-              `<article>${icon(e.icon)}<div><strong>${esc(e.title)}</strong><p>${esc(e.text)}</p><small>Day ${12 + Math.floor(e.tick / CONFIG.ticksPerDay)}</small></div></article>`,
+              `<article>${icon(e.icon)}<div><strong>${esc(e.title)}</strong><p>${esc(e.text)}</p><small>Day ${state.day - Math.floor(state.tick / CONFIG.ticksPerDay) + Math.floor(e.tick / CONFIG.ticksPerDay)}</small></div></article>`,
           )
           .join('')}</div>`,
       );
@@ -994,13 +1015,25 @@ export class HUD {
     dialog.innerHTML = reliefDialog(b);
     if (!dialog.open) dialog.showModal();
   }
+  private openScenarioPicker() {
+    const dialog = this.root.querySelector<HTMLDialogElement>('dialog')!;
+    this.renderer.camera.cancelGesture();
+    if (!dialog.open) {
+      this.dialogResumeSpeed = this.game.state.speed;
+      this.game.setSpeed(0);
+    }
+    dialog.setAttribute('aria-label', 'Choose a new scenario');
+    dialog.innerHTML = `<button class="dialog-close icon-button" data-action="close-dialog" aria-label="Close scenario selection">${icon('x')}</button><h2>Choose a new kingdom.</h2>${scenarioPicker(this.game.state.scenario ?? 'roluos')}<p>This replaces the kingdom saved in this browser. Download a copy from Settings to keep it. The new kingdom will be saved and the main menu will open; choose Continue to play.</p><div class="settings-buttons"><button class="secondary-button" data-action="close-dialog">Keep this kingdom</button><button class="danger-button" data-action="confirm-scenario">Replace saved kingdom</button></div>`;
+    if (!dialog.open) dialog.showModal();
+    dialog.querySelector<HTMLButtonElement>('[data-action="close-dialog"]')?.focus();
+  }
   private openDialog(kind: 'guide' | 'settings') {
     this.renderer.camera.cancelGesture();
     const dialog = this.root.querySelector<HTMLDialogElement>('dialog')!;
     this.dialogResumeSpeed = this.game.state.speed;
     this.game.setSpeed(0);
     dialog.setAttribute('aria-label', kind === 'guide' ? 'Builder’s guide' : 'Game settings');
-    dialog.innerHTML = `<button class="dialog-close icon-button" data-action="close-dialog" aria-label="Close dialog">${icon('x')}</button>${kind === 'guide' ? `<div class="dialog-symbol">${icon('book-open-text')}</div><span class="eyebrow">The royal builder’s guide</span><h2>Every great city<br>begins with water.</h2><p>Capture the monsoon in barays, connect your fields with canals, and turn a flourishing settlement into a temple city.</p><div class="guide-steps"><div>${icon('waves')}<span><strong>Capture & connect</strong>Build reservoirs on clear land. Join them to a river or a filled canal so water can flow. Use Flow (F) to see expected pressure-driven outflow and Elevation (E) to compare ground heights. Tap tiles for depth and surface levels; inspect a baray for its last 60 daily readings. Drag roads or canals to preview a route and its total cost, then release to build. Existing matching tiles are free; blocked or unaffordable routes spend nothing. Press Escape to cancel, or middle-drag / use arrow keys to pan.</span></div><div>${icon('grains')}<span><strong>Grow & sustain</strong>Irrigate paddies within two tiles of water. Workers bring rice and timber home over dry land. Roads speed up deliveries; timber bridges span waterways. Drought stress reaches crop failure at 70%; restore irrigation before harvests are lost.</span></div><div>${icon('bank')}<span><strong>Build & remember</strong>Connect quarries to river landings by water. Assign builders to each site. Follow the five royal commissions to earn rewards. At 200 merit unlock granaries; at 600 unlock workshops and sculpted sanctuaries.</span></div><div>${icon('warehouse')}<span><strong>Store & deliver</strong>Warehouses receive land cargo, expand storage, and add two carts when staffed. A staffed landing supplies one stone barge. Laterite comes from dedicated pits. Use Resources (R) to find finite mineral deposits and timber. People & logistics explains blocked deliveries.</span></div><div>${icon('bowl-food')}<span><strong>Weather & survive</strong>Feed residents daily. Hunger slows all work and prolonged shortages drive people away. Inspect Food & resilience for risks; repair flooded structures after water recedes.</span></div></div><button class="primary-button full-width" data-action="tutorial-start">Start or restart interactive tutorial</button><div class="keyboard-guide"><span><kbd>Space</kbd>Pause</span><span><kbd>1</kbd>–<kbd>6</kbd>Build</span><span><kbd>W</kbd>Water</span><span><kbd>L</kbd>Logistics</span><span><kbd>R</kbd>Resources</span><span><kbd>G</kbd>Grid</span><span><kbd>X</kbd>Demolish</span><span><kbd>Esc</kbd>Cancel</span></div><button class="primary-button full-width" data-action="close-dialog">Begin your legacy ${icon('arrow-right')}</button>` : `<div class="dialog-symbol">${icon('sliders-horizontal')}</div><span class="eyebrow">Make yourself at home</span><h2>Your kingdom,<br>your way.</h2><p>Your city is saved automatically every 30 seconds in this browser. Download a copy to keep it with you.</p><div class="settings-row"><span><strong>Evening colors</strong><small>A softer glow after sunset</small></span><button class="theme-switch" role="switch" aria-label="Evening colors" aria-checked="${document.documentElement.dataset.theme === 'dark'}" data-action="theme"><span></span></button></div><div class="settings-buttons"><button class="secondary-button" data-action="export">${icon('download-simple')}Download save</button><button class="secondary-button" data-action="import">${icon('upload-simple')}Import save</button></div><button class="secondary-button full-width" data-action="save">${icon('floppy-disk')}Save kingdom now</button><button class="secondary-button full-width return-menu" data-action="return-menu">${icon('sign-out')}Save & return to main menu</button><div class="reset-section"><button class="text-button" data-action="reset">Start a new settlement</button><div id="reset-confirm" hidden><p>This replaces the city saved in this browser. Download a copy first if you want to keep it.</p><div class="settings-buttons"><button class="secondary-button" data-action="cancel-reset">Keep this city</button><button class="danger-button" data-action="confirm-reset">Start fresh</button></div></div></div>`}`;
+    dialog.innerHTML = `<button class="dialog-close icon-button" data-action="close-dialog" aria-label="Close dialog">${icon('x')}</button>${kind === 'guide' ? `<div class="dialog-symbol">${icon('book-open-text')}</div><span class="eyebrow">The royal builder’s guide</span><h2>Every great city<br>begins with water.</h2><p>Capture the monsoon in barays, connect your fields with canals, and turn a flourishing settlement into a temple city.</p><div class="guide-steps"><div>${icon('waves')}<span><strong>Capture & connect</strong>Build reservoirs on clear land. Join them to a river or a filled canal so water can flow. Use Flow (F) to see expected pressure-driven outflow and Elevation (E) to compare ground heights. Tap tiles for depth and surface levels; inspect a baray for its last 60 daily readings. Drag roads or canals to preview a route and its total cost, then release to build. Existing matching tiles are free; blocked or unaffordable routes spend nothing. Press Escape to cancel, or middle-drag / use arrow keys to pan.</span></div><div>${icon('grains')}<span><strong>Grow & sustain</strong>Irrigate paddies within two tiles of water. Workers bring rice and timber home over dry land. Roads speed up deliveries; timber bridges span waterways. Drought stress reaches crop failure at 70%; restore irrigation before harvests are lost.</span></div><div>${icon('bank')}<span><strong>Build & remember</strong>Connect quarries to river landings by water. Assign builders to each site. Follow the five royal commissions to earn rewards. At 200 merit unlock granaries; at 600 unlock workshops and sculpted sanctuaries.</span></div><div>${icon('warehouse')}<span><strong>Store & deliver</strong>Warehouses receive land cargo, expand storage, and add two carts when staffed. A staffed landing supplies one stone barge. Laterite comes from dedicated pits. Use Resources (R) to find finite mineral deposits and timber. People & logistics explains blocked deliveries.</span></div><div>${icon('bowl-food')}<span><strong>Weather & survive</strong>Feed residents daily. Hunger slows all work and prolonged shortages drive people away. Inspect Food & resilience for risks; repair flooded structures after water recedes.</span></div></div><button class="primary-button full-width" data-action="tutorial-start">Start or restart interactive tutorial</button><div class="keyboard-guide"><span><kbd>Space</kbd>Pause</span><span><kbd>1</kbd>–<kbd>6</kbd>Build</span><span><kbd>W</kbd>Water</span><span><kbd>L</kbd>Logistics</span><span><kbd>R</kbd>Resources</span><span><kbd>G</kbd>Grid</span><span><kbd>X</kbd>Demolish</span><span><kbd>Esc</kbd>Cancel</span></div><button class="primary-button full-width" data-action="close-dialog">Begin your legacy ${icon('arrow-right')}</button>` : `<div class="dialog-symbol">${icon('sliders-horizontal')}</div><span class="eyebrow">Make yourself at home</span><h2>Your kingdom,<br>your way.</h2><p>Your city is saved automatically every 30 seconds in this browser. Download a copy to keep it with you.</p><div class="settings-row"><span><strong>Evening colors</strong><small>A softer glow after sunset</small></span><button class="theme-switch" role="switch" aria-label="Evening colors" aria-checked="${document.documentElement.dataset.theme === 'dark'}" data-action="theme"><span></span></button></div><div class="settings-buttons"><button class="secondary-button" data-action="export">${icon('download-simple')}Download save</button><button class="secondary-button" data-action="import">${icon('upload-simple')}Import save</button></div><button class="secondary-button full-width" data-action="save">${icon('floppy-disk')}Save kingdom now</button><button class="secondary-button full-width return-menu" data-action="return-menu">${icon('sign-out')}Save & return to main menu</button><div class="reset-section"><button class="text-button" data-action="reset">Choose a new scenario</button></div>`}`;
     dialog.showModal();
   }
   destroy() {

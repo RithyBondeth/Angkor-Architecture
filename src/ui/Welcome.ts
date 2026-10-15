@@ -1,13 +1,21 @@
+import { scenarioPicker, selectedScenario, updateScenarioDetails } from './ScenarioSelection';
+import { scenarioFor } from '../data/scenarios';
+import { createScenario } from '../core/world';
 import type { GameState } from '../core/types';
 import { icon } from './icons';
 import { angkorEmblem } from './emblem';
 import './welcome.css';
 
+export interface WelcomeChoice {
+  state: GameState;
+  restored: boolean;
+}
+
 /** No renderer, simulation, or autosave starts until the player enters their kingdom. */
 export async function showWelcome(
   root: HTMLElement,
   loadingSave: Promise<GameState | null>,
-): Promise<GameState | null> {
+): Promise<WelcomeChoice> {
   root.innerHTML = `<main class="welcome-screen" aria-labelledby="welcome-title">
     <img class="welcome-backdrop" src="/art/angkor-cartoon.jpg" alt="" fetchpriority="high" />
     <div class="welcome-shade" aria-hidden="true"></div>
@@ -36,11 +44,11 @@ export async function showWelcome(
   const abort = new AbortController();
   let saved: GameState | null = null;
 
-  const choice = new Promise<GameState | null>((resolve) => {
-    const enter = (state: GameState | null) => {
+  const choice = new Promise<WelcomeChoice>((resolve) => {
+    const enter = (state: GameState, restored: boolean) => {
       abort.abort();
       dialog.close();
-      resolve(state);
+      resolve({ state, restored });
     };
     root.addEventListener(
       'click',
@@ -49,15 +57,14 @@ export async function showWelcome(
         if (!button || button.disabled) return;
         switch (button.dataset.menu) {
           case 'play':
-            if (!saved) return enter(null);
-            dialog.innerHTML = `<h2 id="welcome-dialog-title">Begin a new legacy?</h2><p>Starting a new settlement replaces your saved kingdom when the game next saves. You can download your current city from the in-game Settings first.</p><div class="settings-buttons"><button class="secondary-button" data-menu="close" autofocus>Keep my kingdom</button><button class="danger-button" data-menu="new">Start new settlement</button></div>`;
+            dialog.innerHTML = `<button class="dialog-close icon-button" data-menu="close" aria-label="Close scenario selection">${icon('x')}</button><h2 id="welcome-dialog-title">Choose your kingdom.</h2>${scenarioPicker()}${saved ? '<p>Starting replaces your saved kingdom when the game next saves. Download your current city from in-game Settings first if you want to keep it.</p>' : ''}<div class="settings-buttons"><button class="secondary-button" data-menu="close">Back to menu</button><button class="${saved ? 'danger-button' : 'primary-button'}" data-menu="start-scenario">${saved ? 'Replace kingdom & start' : 'Start scenario'}</button></div>`;
             dialog.showModal();
             break;
           case 'continue':
-            if (saved) enter(saved);
+            if (saved) enter(saved, true);
             break;
-          case 'new':
-            enter(null);
+          case 'start-scenario':
+            enter(createScenario(selectedScenario(dialog)), false);
             break;
           case 'close':
             dialog.close();
@@ -87,10 +94,18 @@ export async function showWelcome(
     );
   });
 
+  root.addEventListener(
+    'change',
+    (event) => {
+      if ((event.target as HTMLInputElement).name === 'scenario') updateScenarioDetails(dialog);
+    },
+    { signal: abort.signal },
+  );
+
   try {
     saved = await loadingSave;
     saveStatus.textContent = saved
-      ? `Day ${saved.day} · ${saved.population} residents · Roluos`
+      ? `Day ${saved.day} · ${saved.population} residents · ${scenarioFor(saved).region}`
       : 'Your kingdom is yet to be built';
   } catch {
     saveStatus.textContent =

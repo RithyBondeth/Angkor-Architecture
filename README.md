@@ -51,7 +51,7 @@ npm run preview    # Serve the production build
 
 ## Play
 
-The welcome screen offers **Play**, **Continue**, and **Settings**. Play starts a new settlement and asks before replacing an existing kingdom. Continue restores the newest valid local save and shows its day and population; it stays disabled when no valid save exists. Settings lets you choose the evening colors before entering the game, and How to play introduces water, food, and royal commissions. The simulation and autosave begin only after you choose Play or Continue.
+The welcome screen offers **Play**, **Continue**, and **Settings**. Play opens a scenario picker with terrain, supplies, season timing, and opening objectives. Choose a scenario and explicitly start it; when a save exists, the final button confirms replacement. Browsing or canceling the picker leaves the saved kingdom untouched. Continue restores the newest valid local save and shows its day and population; it stays disabled when no valid save exists. Settings lets you choose the evening colors before entering the game, and How to play introduces water, food, and royal commissions. The simulation and autosave begin only after you choose Play or Continue.
 
 Select a building from the bottom tray, then click a valid site to plan it. For roads and canals, press and drag to preview a connected L-shaped route (longer grid axis first, X first on ties); release to build. The preview lists the total material cost and the number of new and existing matching tiles. Existing roads/canals and their projects are retained without another charge. Blocked or unaffordable routes spend nothing. Escape or Cancel discards the drag; zooming, opening a dialog, or losing pointer capture also cancels it. While these tools are selected, use middle-drag or arrow keys to pan; tap/click still plans one tile. Drag the map to pan; scroll to zoom. Materials are reserved immediately, and builders complete the project over simulation ticks. Click a site to change its crew, pause or resume work, or review a cancellation refund. The Construction view lists all active projects and the available workforce.
 
@@ -92,7 +92,21 @@ Completed buildings can be inspected, paused, upgraded, or removed. The trash to
 
 The speed controls run the simulation at 1×, 2×, or 4×. A day lasts six fixed simulation ticks; wet and dry seasons last 90 days each.
 
+## Scenarios
+
+| Scenario             | Terrain and timing                                                                              | Starting rice / timber / sandstone / laterite | Opening commission                                     |
+| -------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------ |
+| Roluos foundations   | Level grasslands, broad waterways; wet day 12                                                   | 680 / 420 / 340 / 210                         | Complete a canal, a paddy, and a baray                 |
+| Tonlé Sap floodplain | Wider rivers, fertile low outer banks, raised settlement core; wet day 35                       | 900 / 500 / 200 / 160                         | Complete a floodgate and two paddies; receive 100 rice |
+| Kulen foothills      | Wooded northwestern slopes, narrow rivers, level central sites; wet day 76, approaching drought | 480 / 320 / 520 / 300                         | Complete six canals, a baray, and a paddy              |
+
+All scenarios begin with 84 residents and 48 merit. Floodplain chapter two requires two bridges, a warehouse, and two homes. Foothills chapter two requires 120 delivered sandstone, eight roads, and a warehouse. Each scenario then tests dry-season resilience and progresses toward a thriving temple city. Build goals count new completed projects and delivery goals exclude starting supplies. After five commissions, play continues freely.
+
+Continue, JSON import/export, and autosaves preserve the scenario, terrain, depleted deposits, and campaign progress. Older saves without a scenario retain the original Roluos campaign. In-game Settings also offers a scenario picker; its final replacement action saves the new kingdom and returns to the main menu, where Continue enters it.
+
 ## Royal campaign
+
+The table below describes the original Roluos campaign. Scenario-specific objectives appear in Royal commissions in the game.
 
 | Chapter                        | Objectives                                                                                                                                                                | Reward                         |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
@@ -125,7 +139,7 @@ The water automaton reads the old state and accumulates pressure-driven flux in 
 
 A* uses a binary min-heap, Manhattan distance, and mode-specific traversal. The worker heuristic is scaled to the minimum traversal cost to remain admissible with roads: roads and bridges cost 0.65, open land costs 1, and forests cost 2. Worker movement uses the same cost to speed up travel on paths. Barges need a water depth of at least 0.45. Delivery jobs carry actual cargo, which enters the global resource pool only on arrival. Rice consumption happens each simulation day. Rates in the resource bar share the production calculation: staffing, irrigation, crop stress, condition, flooding, and hunger all reduce output. Delivery connectivity and travel time determine when cargo reaches the granary. Production stock retains fractional output so impaired workers can still make gradual progress.
 
-The 32 × 32 deterministic starting world uses one procedural canvas texture atlas shared by PixiJS sprites. All artwork is local. Tiles, trees, and buildings are created once and sorted by depth; changing overlays and water tint does not rebuild the scene. The UI uses self-hosted Fredoka and DM Sans, plus Phosphor icons and a custom prasat emblem. Floating cream panels, leafy green controls, a collapsible construction dock, and closable information panels keep the kingdom map central. Terrain grain, shaded foliage, architectural lighting, and motion-aware ambient particles are generated locally. The menu and temple sprites use bundled cartoon Angkor artwork; see [design notes and asset provenance](docs/REDESIGN.md).
+The three deterministic 32 × 32 scenario worlds use one procedural canvas texture atlas shared by PixiJS sprites. All artwork is local. Tiles, trees, and buildings are created once and sorted by depth; changing overlays and water tint does not rebuild the scene. The UI uses self-hosted Fredoka and DM Sans, plus Phosphor icons and a custom prasat emblem. Floating cream panels, leafy green controls, a collapsible construction dock, and closable information panels keep the kingdom map central. Terrain grain, shaded foliage, architectural lighting, and motion-aware ambient particles are generated locally. The menu and temple sprites use bundled cartoon Angkor artwork; see [design notes and asset provenance](docs/REDESIGN.md).
 
 ## Saves
 
@@ -139,7 +153,7 @@ Settings supports downloading and importing JSON saves, the evening colors, star
 
 ## Scope and next steps
 
-This prototype includes temple moats, foundation stability, staged temple construction, a bas-relief rotation puzzle, delivered-rate feedback, warehouses, transport capacity, finite deposits, dedicated laterite production, delivery diagnostics, a five-chapter royal campaign, permanent merit unlocks, working granary and workshop benefits, the resource loop, drought-driven crop failures and recovery, flood damage and timed repairs, food shortages and population consequences, timed construction and temple upgrades, shared builder assignment, demolition and refunds, buildable roads and bridges, hydraulic simulation, routing, rendering, and local persistence. Builder labor is pooled; the crews drawn at sites do not yet travel there as individual agents. Erosion and silt, audio, campaign maps, cloud saves, and a PWA are future work. Historical themes guide the visual language, while map dimensions, units, dates, resource rates, and progression are game balance abstractions.
+This prototype includes temple moats, foundation stability, staged temple construction, a bas-relief rotation puzzle, delivered-rate feedback, warehouses, transport capacity, finite deposits, dedicated laterite production, delivery diagnostics, three scenario campaigns of five chapters each, permanent merit unlocks, working granary and workshop benefits, the resource loop, drought-driven crop failures and recovery, flood damage and timed repairs, food shortages and population consequences, timed construction and temple upgrades, shared builder assignment, demolition and refunds, buildable roads and bridges, hydraulic simulation, routing, rendering, and local persistence. Builder labor is pooled; the crews drawn at sites do not yet travel there as individual agents. Erosion and silt, audio, cloud saves, and a PWA are future work. Historical themes guide the visual language, while map dimensions, units, dates, resource rates, and progression are game balance abstractions.
 
 The design document also envisions regional campaigns from the Tonlé Sap floodplain to the Kulen foothills, Khmer kbach ornament, and a soundscape inspired by pinpeat music.
 

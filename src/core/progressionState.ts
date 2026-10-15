@@ -1,5 +1,6 @@
 import { BUILDINGS } from '../data/buildings';
-import { COMMISSIONS, FINAL_TEMPLE_MERIT } from '../data/progression';
+import { commissionsFor } from '../data/scenarios';
+import { FINAL_TEMPLE_MERIT } from '../data/progression';
 import type { BuildingKind, GameState, ProgressionState } from './types';
 
 export function freshProgression(merit: number, tick = 0): ProgressionState {
@@ -15,5 +16,5 @@ export function templeUpgradeMerit(level: number): number {
   return level >= 2 ? FINAL_TEMPLE_MERIT : 0;
 }
 export function activeCommission(state: GameState) {
-  return COMMISSIONS[state.progression.claimed.length];
+  return commissionsFor(state)[state.progression.claimed.length];
 }
