@@ -102,7 +102,7 @@ The speed controls run the simulation at 1×, 2×, or 4×. A day lasts six fixed
 
 All scenarios begin with 84 residents and 48 merit. Floodplain chapter two requires two bridges, a warehouse, and two homes. Foothills chapter two requires 120 delivered sandstone, eight roads, and a warehouse. Each scenario then tests dry-season resilience and progresses toward a thriving temple city. Build goals count new completed projects and delivery goals exclude starting supplies. After five commissions, play continues freely.
 
-Continue, JSON import/export, and autosaves preserve the scenario, terrain, depleted deposits, and campaign progress. Older saves without a scenario retain the original Roluos campaign. In-game Settings also offers a scenario picker; its final replacement action saves the new kingdom and returns to the main menu, where Continue enters it.
+Save slots, JSON import/export, and autosaves preserve the scenario, terrain, depleted deposits, and campaign progress. Older saves without a scenario retain the original Roluos campaign. In-game Settings also offers a scenario picker; its final replacement action changes only the active slot and returns to the main menu, where Continue enters it. Choose Play on the main menu to create another kingdom in an empty slot instead.
 
 ## Royal campaign
 
@@ -123,7 +123,7 @@ Delivered cargo totals accumulate from the beginning of the campaign; daily stre
 ```text
 src/
 ├── audio/         # Procedural Web Audio, device preferences and lifecycle
-├── core/          # Typed world, commands, construction state, saves and migration
+├── core/          # Typed world, commands, construction state, save slots and migration
 ├── simulation/    # Water, survival, campaign progression, A*, logistics, repairs, workforce
 ├── rendering/     # PixiJS scene, texture atlas, scaffolding, isometric mapping, camera
 ├── ui/            # HUD, survival warnings, project controls, refunds, responsive styles
@@ -144,7 +144,13 @@ The three deterministic 32 × 32 scenario worlds use one procedural canvas textu
 
 ## Saves
 
-Every 30 seconds while playing, the complete versioned state is written to IndexedDB with a LocalStorage backup. Leaving or hiding the page during play also writes a synchronous backup. Continue restores the newest valid copy from the welcome screen. Version 5 saves add tile deposit quantities, shipment destinations, delivery warnings, and the transport dispatch cursor. Version 1 through 4 saves and JSON exports migrate automatically, preserving city stock, repairs, and campaign progress. Version 4 saves introduced merit milestones and royal commission progress. An already awarded first commission remains complete without paying its reward again; unavailable historic delivery totals begin at zero. Version 3 survival damage, hunger, and ongoing repairs are preserved. Older versions receive healthy buildings and no starting hunger; existing infrastructure becomes editable without resetting the economy.
+Six independent save slots hold named kingdoms. Play selects a scenario, kingdom name, and destination slot; it defaults to an empty slot. Your kingdoms opens the slot library to load, rename, or recover a city. Continue opens the last played valid slot, or the most recently saved kingdom when that selection is unavailable. In-game Settings shows the active slot and can rename it. New kingdoms are saved before entering the map.
+
+Every 30 seconds while playing, the active slot receives an autosave in IndexedDB with a LocalStorage fallback. Each slot keeps four rolling checkpoints, plus a separate synchronous recovery backup when leaving or hiding the page. Unchanged autosaves do not rotate useful history away while paused. The slot manager lists save type, time, scenario, day, and population. Recovery promotes a selected checkpoint to the latest save while keeping the previous head in rolling history. Starting a scenario or importing a JSON save changes only the active/destination slot and preserves recent checkpoints until they rotate out. Download a JSON save for a permanent archive; rolling recovery is bounded. Kingdom names belong to slots and importing a save keeps the destination slot name.
+
+Each checkpoint is validated independently. Loading merges valid local and database copies, chooses the newest valid checkpoint, and skips damaged ones; the library flags unreadable checkpoint data. Local exit backups remain eligible even when an older database write finishes afterward. Existing single-save installations migrate their newest valid save into slot 1 as “My first kingdom”; legacy copies remain untouched. When either IndexedDB or LocalStorage is unavailable, the other can save. If both fail, saving reports an error and existing durable data remains untouched.
+
+Version 5 saves add tile deposit quantities, shipment destinations, delivery warnings, and the transport dispatch cursor. Version 1 through 4 saves and JSON exports migrate automatically, preserving city stock, repairs, and campaign progress. Version 4 saves introduced merit milestones and royal commission progress. An already awarded first commission remains complete without paying its reward again; unavailable historic delivery totals begin at zero. Version 3 survival damage, hunger, and ongoing repairs are preserved. Older versions receive healthy buildings and no starting hunger; existing infrastructure becomes editable without resetting the economy.
 
 Version 6 adds temple engineering, partial carving and its completion flag, and a bounded receipt history for actual delivery rates. Versions 1 through 5 migrate automatically. Existing deposit depletion, deliveries, construction progress, and campaign rewards are preserved; unavailable receipt history starts empty. Completed older temples receive completed carvings without another reward.
 
