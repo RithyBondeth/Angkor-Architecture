@@ -24,8 +24,9 @@ async function main() {
   const root = document.querySelector<HTMLElement>('#app')!;
   const persistence = new Persistence();
   const audio = new AudioController(root);
-  const choice = await showWelcome(root, persistence.load(), audio);
+  const choice = await showWelcome(root, persistence, audio);
   createShell(root);
+  document.title = `${persistence.activeName} | Angkor Architect`;
   const game = new Game(choice.state);
   const renderer = new WorldRenderer(game, document.querySelector<HTMLElement>('#world')!);
   await renderer.init();
