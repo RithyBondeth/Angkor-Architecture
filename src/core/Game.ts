@@ -1,3 +1,5 @@
+import { orthogonalRoute } from './buildRoute';
+import type { RouteKind, RoutePreview } from './buildRoute';
 import { advanceTutorial } from './tutorialState';
 import { BUILDINGS } from '../data/buildings';
 import {
@@ -190,6 +192,83 @@ export class Game {
   place(kind: BuildingKind, p: Point): PlacementResult {
     const result = this.canPlace(kind, p);
     if (!result.ok) return result;
+    this.startBuilding(kind, p);
+    this.notify();
+    return {
+      ok: true,
+      message: `${BUILDINGS[kind].name} project started. Click the site to manage its builders.`,
+    };
+  }
+  previewRoute(kind: RouteKind, start: Point, end: Point): RoutePreview {
+    const preview: RoutePreview = {
+      ok: false,
+      message: '',
+      cells: [],
+      cost: {},
+      newTiles: 0,
+      existingTiles: 0,
+    };
+    if (
+      ![start, end].every(
+        (p) => Number.isInteger(p.x) && Number.isInteger(p.y) && tileAt(this.state, p.x, p.y),
+      )
+    ) {
+      preview.message = 'Keep the entire route inside the kingdom.';
+      return preview;
+    }
+    let blocked = '';
+    for (const point of orthogonalRoute(start, end)) {
+      const existing = buildingAt(this.state, point.x, point.y);
+      if (
+        existing?.kind === kind ||
+        (!existing && tileAt(this.state, point.x, point.y)!.terrain === kind)
+      ) {
+        preview.cells.push({ point, status: 'existing' });
+        preview.existingTiles++;
+        continue;
+      }
+      const result = this.canPlace(kind, point);
+      preview.cells.push({ point, status: result.ok ? 'new' : 'blocked' });
+      preview.newTiles++;
+      for (const [key, amount] of Object.entries(BUILDINGS[kind].cost)) {
+        const resource = key as Resource;
+        preview.cost[resource] = (preview.cost[resource] ?? 0) + amount;
+      }
+      if (!result.ok && !blocked)
+        blocked = `Tile ${point.x + 1}, ${point.y + 1}: ${result.message}`;
+    }
+    if (!preview.cells.length) preview.message = 'Choose a route inside the kingdom.';
+    else if (blocked) preview.message = blocked;
+    else if (!preview.newTiles) preview.message = 'This route already exists. No materials needed.';
+    else {
+      const shortfall = Object.entries(preview.cost).find(
+        ([key, amount]) => this.state.resources[key as Resource] < amount,
+      );
+      preview.ok = !shortfall;
+      preview.message = shortfall
+        ? `Not enough ${shortfall[0]} for the whole route.`
+        : 'Release to start construction · Esc to cancel';
+    }
+    return preview;
+  }
+  placeRoute(kind: RouteKind, start: Point, end: Point): PlacementResult {
+    // Revalidate on release: the simulation can change resources and flooding during a drag.
+    const preview = this.previewRoute(kind, start, end);
+    if (!preview.ok) return preview;
+    for (const cell of preview.cells)
+      if (cell.status === 'new') this.startBuilding(kind, cell.point);
+    this.log(
+      'Route planned',
+      `${preview.newTiles} ${kind === 'road' ? 'road' : 'canal'} projects started; ${preview.existingTiles} existing tiles retained.`,
+      'hammer',
+    );
+    this.notify();
+    return {
+      ok: true,
+      message: `${preview.newTiles} ${kind === 'road' ? 'road' : 'canal'} projects planned. Inspect sites to assign builders; unstaffed sites wait.`,
+    };
+  }
+  private startBuilding(kind: BuildingKind, p: Point): void {
     const def = BUILDINGS[kind];
     const underlay = ['gate', 'bridge'].includes(kind)
       ? (buildingAt(this.state, p.x, p.y) ?? null)
@@ -227,11 +306,6 @@ export class Game {
         : 'The site is reserved. Assign available builders to begin work.',
       'hammer',
     );
-    this.notify();
-    return {
-      ok: true,
-      message: `${def.name} project started. Click the site to manage its builders.`,
-    };
   }
   assignBuilders(id: string, count: number): PlacementResult {
     const b = this.state.buildings.find((b) => b.id === id);

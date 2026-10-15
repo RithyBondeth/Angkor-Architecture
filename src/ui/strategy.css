@@ -1273,3 +1273,14 @@ dialog > p {
   font-size: 12px;
   line-height: 1.6;
 }
+
+.game-shell .placement-banner .route-total {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 12px;
+}
+.game-shell .placement-banner.route-preview small {
+  display: block;
+}

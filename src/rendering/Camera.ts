@@ -1,8 +1,17 @@
 import type { Container } from 'pixi.js';
 
+export interface BuildGesture {
+  start(x: number, y: number): boolean;
+  move(x: number, y: number): void;
+  end(x: number, y: number): void;
+  cancel(): void;
+}
+
 export class Camera {
   zoom = 0.72;
   private dragging = false;
+  private building = false;
+  private primary = true;
   private moved = false;
   private lastX = 0;
   private lastY = 0;
@@ -16,17 +25,22 @@ export class Camera {
     private readonly onClick: (x: number, y: number) => void,
     private readonly onMove: (x: number, y: number) => void,
     private readonly onZoom: (zoom: number) => void,
+    private readonly buildGesture?: BuildGesture,
   ) {
     const options = { signal: this.abort.signal };
     surface.addEventListener(
       'pointerdown',
       (e) => {
-        if (e.button !== 0 && e.button !== 1) return;
+        if ((e.button !== 0 && e.button !== 1) || this.pointer !== null) return;
         this.dragging = true;
         this.moved = false;
         this.pointer = e.pointerId;
         this.lastX = this.downX = e.clientX;
         this.lastY = this.downY = e.clientY;
+        this.primary = e.button === 0;
+        const rect = surface.getBoundingClientRect();
+        this.building =
+          this.primary && !!this.buildGesture?.start(e.clientX - rect.left, e.clientY - rect.top);
         surface.setPointerCapture(e.pointerId);
       },
       options,
@@ -34,6 +48,12 @@ export class Camera {
     surface.addEventListener(
       'pointermove',
       (e) => {
+        if (this.pointer !== null && e.pointerId !== this.pointer) return;
+        if (this.building) {
+          const rect = surface.getBoundingClientRect();
+          this.buildGesture?.move(e.clientX - rect.left, e.clientY - rect.top);
+          return;
+        }
         if (this.dragging) {
           if (Math.hypot(e.clientX - this.downX, e.clientY - this.downY) > 5) this.moved = true;
           if (this.moved) {
@@ -52,25 +72,27 @@ export class Camera {
     surface.addEventListener(
       'pointerup',
       (e) => {
-        if (!this.dragging) return;
+        if (!this.dragging || e.pointerId !== this.pointer) return;
+        const building = this.building;
+        this.building = false;
         this.dragging = false;
-        if (!this.moved) {
-          const rect = surface.getBoundingClientRect();
-          this.onClick(e.clientX - rect.left, e.clientY - rect.top);
-        }
+        this.pointer = null;
         if (surface.hasPointerCapture(e.pointerId)) surface.releasePointerCapture(e.pointerId);
-        this.pointer = null;
+        const rect = surface.getBoundingClientRect();
+        if (building) this.buildGesture?.end(e.clientX - rect.left, e.clientY - rect.top);
+        else if (!this.moved && this.primary)
+          this.onClick(e.clientX - rect.left, e.clientY - rect.top);
       },
       options,
     );
-    surface.addEventListener(
-      'pointercancel',
-      () => {
-        this.dragging = false;
-        this.pointer = null;
-      },
-      options,
-    );
+    for (const event of ['pointercancel', 'lostpointercapture'])
+      surface.addEventListener(
+        event,
+        (e) => {
+          if ((e as PointerEvent).pointerId === this.pointer) this.cancelGesture();
+        },
+        options,
+      );
     surface.addEventListener(
       'wheel',
       (e) => {
@@ -85,7 +107,18 @@ export class Camera {
       { ...options, passive: false },
     );
   }
+  cancelGesture() {
+    const pointer = this.pointer;
+    const building = this.building;
+    this.pointer = null;
+    this.dragging = false;
+    this.building = false;
+    if (pointer !== null && this.surface.hasPointerCapture(pointer))
+      this.surface.releasePointerCapture(pointer);
+    if (building) this.buildGesture?.cancel();
+  }
   reset() {
+    this.cancelGesture();
     const width = this.surface.clientWidth;
     const height = this.surface.clientHeight;
     this.zoom = Math.max(0.48, Math.min(1.05, width / 1260));
@@ -96,6 +129,7 @@ export class Camera {
     this.onZoom(this.zoom);
   }
   setZoom(zoom: number, x = this.surface.clientWidth * 0.45, y = this.surface.clientHeight * 0.45) {
+    this.cancelGesture();
     const next = Math.max(0.3, Math.min(1.6, zoom));
     this.world.x = x - (x - this.world.x) * (next / this.zoom);
     this.world.y = y - (y - this.world.y) * (next / this.zoom);
@@ -105,6 +139,7 @@ export class Camera {
     this.onZoom(next);
   }
   pan(dx: number, dy: number) {
+    this.cancelGesture();
     this.world.x += dx;
     this.world.y += dy;
     this.clamp();
@@ -117,8 +152,7 @@ export class Camera {
     this.world.y = Math.max(-1100 * this.zoom, Math.min(this.surface.clientHeight, this.world.y));
   }
   destroy() {
-    if (this.pointer !== null && this.surface.hasPointerCapture(this.pointer))
-      this.surface.releasePointerCapture(this.pointer);
+    this.cancelGesture();
     this.abort.abort();
   }
 }
