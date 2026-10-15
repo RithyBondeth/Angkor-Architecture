@@ -1,3 +1,4 @@
+import type { AudioController } from '../audio/AudioController';
 import { scenarioPicker, selectedScenario, updateScenarioDetails } from './ScenarioSelection';
 import { scenarioFor } from '../data/scenarios';
 import { createScenario } from '../core/world';
@@ -15,6 +16,7 @@ export interface WelcomeChoice {
 export async function showWelcome(
   root: HTMLElement,
   loadingSave: Promise<GameState | null>,
+  audio: AudioController,
 ): Promise<WelcomeChoice> {
   root.innerHTML = `<main class="welcome-screen" aria-labelledby="welcome-title">
     <img class="welcome-backdrop" src="/art/angkor-cartoon.jpg" alt="" fetchpriority="high" />
@@ -74,7 +76,7 @@ export async function showWelcome(
             dialog.showModal();
             break;
           case 'settings':
-            dialog.innerHTML = `<button class="dialog-close icon-button" data-menu="close" aria-label="Close settings">${icon('x')}</button><div class="dialog-symbol">${icon('gear-six')}</div><h2 id="welcome-dialog-title">Make it your own.</h2><div class="settings-row"><span><strong>Evening colors</strong><small>A softer glow after sunset</small></span><button class="theme-switch" role="switch" aria-label="Evening colors" aria-checked="${document.documentElement.dataset.theme === 'dark'}" data-menu="theme"><span></span></button></div><p>Kingdoms save automatically every 30 seconds while you play. Continue your game to download or import a save from Settings.</p><button class="primary-button full-width" data-menu="close">Back to menu ${icon('arrow-right')}</button>`;
+            dialog.innerHTML = `<button class="dialog-close icon-button" data-menu="close" aria-label="Close settings">${icon('x')}</button><div class="dialog-symbol">${icon('gear-six')}</div><h2 id="welcome-dialog-title">Make it your own.</h2><div class="settings-row"><span><strong>Evening colors</strong><small>A softer glow after sunset</small></span><button class="theme-switch" role="switch" aria-label="Evening colors" aria-checked="${document.documentElement.dataset.theme === 'dark'}" data-menu="theme"><span></span></button></div>${audio.settingsMarkup()}<p>Kingdoms save automatically every 30 seconds while you play. Continue your game to download or import a save from Settings.</p><button class="primary-button full-width" data-menu="close">Back to menu ${icon('arrow-right')}</button>`;
             dialog.showModal();
             break;
           case 'theme': {

@@ -122,6 +122,7 @@ Delivered cargo totals accumulate from the beginning of the campaign; daily stre
 
 ```text
 src/
+├── audio/         # Procedural Web Audio, device preferences and lifecycle
 ├── core/          # Typed world, commands, construction state, saves and migration
 ├── simulation/    # Water, survival, campaign progression, A*, logistics, repairs, workforce
 ├── rendering/     # PixiJS scene, texture atlas, scaffolding, isometric mapping, camera
@@ -153,7 +154,7 @@ Settings supports downloading and importing JSON saves, the evening colors, star
 
 ## Scope and next steps
 
-This prototype includes temple moats, foundation stability, staged temple construction, a bas-relief rotation puzzle, delivered-rate feedback, warehouses, transport capacity, finite deposits, dedicated laterite production, delivery diagnostics, three scenario campaigns of five chapters each, permanent merit unlocks, working granary and workshop benefits, the resource loop, drought-driven crop failures and recovery, flood damage and timed repairs, food shortages and population consequences, timed construction and temple upgrades, shared builder assignment, demolition and refunds, buildable roads and bridges, hydraulic simulation, routing, rendering, and local persistence. Builder labor is pooled; the crews drawn at sites do not yet travel there as individual agents. Erosion and silt, audio, cloud saves, and a PWA are future work. Historical themes guide the visual language, while map dimensions, units, dates, resource rates, and progression are game balance abstractions.
+This prototype includes temple moats, foundation stability, staged temple construction, a bas-relief rotation puzzle, delivered-rate feedback, warehouses, transport capacity, finite deposits, dedicated laterite production, delivery diagnostics, three scenario campaigns of five chapters each, permanent merit unlocks, working granary and workshop benefits, the resource loop, drought-driven crop failures and recovery, flood damage and timed repairs, food shortages and population consequences, timed construction and temple upgrades, shared builder assignment, demolition and refunds, buildable roads and bridges, hydraulic simulation, routing, rendering, and local persistence. Builder labor is pooled; the crews drawn at sites do not yet travel there as individual agents. Erosion and silt, cloud saves, and a PWA are future work. Historical themes guide the visual language, while map dimensions, units, dates, resource rates, and progression are game balance abstractions.
 
 The design document also envisions regional campaigns from the Tonlé Sap floodplain to the Kulen foothills, Khmer kbach ornament, and a soundscape inspired by pinpeat music.
 
@@ -178,3 +179,9 @@ Distributed under the MIT License. See [`LICENSE`](LICENSE) for details.
 New settlements open a six-lesson tutorial: read the water overlay, complete a canal that fills with water, plan a paddy, inspect its assigned builders, finish and irrigate the field, and receive rice from that field. The book button in Kingdom views reopens the current lesson. Site suggestions outline a valid location and move the camera there; the player still places and pays for every project normally. Inspecting a project exposes its crew controls, and delivery lessons show transport problems and remedies.
 
 Progress, tracked sites, and completion or skip choices travel with local saves and JSON exports. Removed sites return the lesson to the relevant building step. Skip at any time, or start/restart from the builder’s guide. Existing saves without tutorial progress remain opted out until the player starts it. Lessons award no resources and do not pause or change simulation speed.
+
+## Sound and atmosphere
+
+Successful placements play a short construction cue; canals, moats, and barays use a water tone. A dragged route produces one cue. Actual cargo arrivals play distinct worker and barge chimes; failed deliveries, refunds, and loading saves stay silent. Effects are rate limited at high simulation speeds. A locally generated water texture accompanies the kingdom, becoming softer and darker in the dry season. No external audio files or services are required.
+
+Settings in the welcome screen and game provide separate master, sound effects, and water ambience volumes, a mute toggle, and a test effects button. The header also offers quick mute. Preferences persist on this browser and origin, independently of kingdom saves. Audio starts after a click, tap, or key press, suspends when the page is hidden, and resumes on return when the browser permits it. Unsupported or blocked audio does not prevent playing.
