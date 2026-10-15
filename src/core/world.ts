@@ -1,3 +1,4 @@
+import { freshTutorial } from './tutorialState';
 import { CONFIG } from '../data/config';
 import { BUILDINGS } from '../data/buildings';
 import { completedBuilding, registerInfrastructure } from './buildingState';
@@ -50,6 +51,7 @@ export function createWorld(seed = 802): GameState {
   const size = CONFIG.worldSize;
   const state: GameState = {
     version: 6,
+    tutorial: freshTutorial(),
     seed,
     width: size,
     height: size,

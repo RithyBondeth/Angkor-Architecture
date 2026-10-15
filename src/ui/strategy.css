@@ -747,6 +747,7 @@ summary:focus-visible {
 }
 .game-shell .toast {
   position: absolute;
+  top: auto;
   left: 50%;
   bottom: 270px;
   transform: translateX(-50%);
@@ -1256,4 +1257,19 @@ dialog > p {
   .dock-toggle .ph {
     transition: none;
   }
+}
+
+.tutorial-progress {
+  width: 100%;
+  height: 8px;
+  accent-color: var(--green);
+  margin: 12px 0;
+}
+.tutorial-status {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  font-size: 12px;
+  line-height: 1.6;
 }

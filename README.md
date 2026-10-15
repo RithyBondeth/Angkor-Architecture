@@ -155,3 +155,9 @@ The design document also envisions regional campaigns from the Tonlé Sap floodp
 ## License
 
 Distributed under the MIT License. See [`LICENSE`](LICENSE) for details.
+
+## Interactive tutorial
+
+New settlements open a six-lesson tutorial: read the water overlay, complete a canal that fills with water, plan a paddy, inspect its assigned builders, finish and irrigate the field, and receive rice from that field. The book button in Kingdom views reopens the current lesson. Site suggestions outline a valid location and move the camera there; the player still places and pays for every project normally. Inspecting a project exposes its crew controls, and delivery lessons show transport problems and remedies.
+
+Progress, tracked sites, and completion or skip choices travel with local saves and JSON exports. Removed sites return the lesson to the relevant building step. Skip at any time, or start/restart from the builder’s guide. Existing saves without tutorial progress remain opted out until the player starts it. Lessons award no resources and do not pause or change simulation speed.
