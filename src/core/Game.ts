@@ -1,3 +1,4 @@
+import { recordReservoirHistory } from '../simulation/ReservoirHistory';
 import { orthogonalRoute } from './buildRoute';
 import type { RouteKind, RoutePreview } from './buildRoute';
 import { advanceTutorial } from './tutorialState';
@@ -41,12 +42,15 @@ export class Game {
   private readonly survival = new Survival();
   private readonly progression = new Progression();
   private readonly listeners = new Set<() => void>();
-  constructor(public state: GameState) {}
+  constructor(public state: GameState) {
+    recordReservoirHistory(state);
+  }
   subscribe(listener: () => void) {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
   notify() {
+    recordReservoirHistory(this.state);
     advanceTutorial(this.state);
     for (const listener of this.listeners) listener();
   }

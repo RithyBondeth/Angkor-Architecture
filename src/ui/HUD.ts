@@ -1,3 +1,4 @@
+import { waterPlanningTools, reservoirHistoryChart, reservoirList } from './WaterPlanningUI';
 import { isRouteKind } from '../core/buildRoute';
 import { freshTutorial, inspectTutorialSite } from '../core/tutorialState';
 import { tutorialPanel } from './TutorialUI';
@@ -359,6 +360,8 @@ export class HUD {
           e.preventDefault();
           this.game.setSpeed(this.game.state.speed === 0 ? this.lastSpeed : 0);
         }
+        if (e.key === 'f') this.setOverlay(this.overlay === 'flow' ? 'none' : 'flow');
+        if (e.key === 'e') this.setOverlay(this.overlay === 'elevation' ? 'none' : 'elevation');
         if (e.key === 'w') this.setOverlay(this.overlay === 'water' ? 'none' : 'water');
         if (e.key === 'l') this.setOverlay(this.overlay === 'logistics' ? 'none' : 'logistics');
         if (e.key === 'r') this.setOverlay(this.overlay === 'resources' ? 'none' : 'resources');
@@ -558,14 +561,19 @@ export class HUD {
     });
     const label = this.root.querySelector<HTMLElement>('#overlay-label')!;
     label.hidden = overlay === 'none';
+    label.dataset.overlay = overlay;
     label.textContent =
-      overlay === 'water'
-        ? 'Water depth overlay'
-        : overlay === 'logistics'
-          ? 'Active delivery routes'
-          : overlay === 'resources'
-            ? 'Gold sandstone · clay laterite · green timber'
-            : 'Construction grid';
+      overlay === 'flow'
+        ? 'Strongest outflow next tick · thicker = more water'
+        : overlay === 'elevation'
+          ? 'Ground elevation · blue low → gold high · tap for readings'
+          : overlay === 'water'
+            ? 'Water depth overlay'
+            : overlay === 'logistics'
+              ? 'Active delivery routes'
+              : overlay === 'resources'
+                ? 'Gold sandstone · clay laterite · green timber'
+                : 'Construction grid';
   }
   private renderBuildMenu() {
     this.lastUnlocks = BUILD_ORDER.map((k) => buildingUnlocked(this.game.state, k)).join(':');
@@ -791,7 +799,7 @@ export class HUD {
       );
       const fill = Math.min(100, (volume / (def.size * def.size * 6)) * 100);
       this.renderInspector(
-        `<div class="panel-eyebrow">${def.category === 'water' ? 'Water management' : def.category === 'production' ? 'Production' : def.category === 'infrastructure' ? 'Paths & bridges' : 'Civic life'}<button class="icon-button" data-action="close-inspector" aria-label="Close building details">${icon('x')}</button></div><h2>${selected.kind === 'baray' ? 'Royal Baray' : def.name}</h2><p class="panel-subtitle">${def.subtitle}</p><div class="inspector-art"><img src="${this.renderer.atlas.thumbnail(selected.kind)}" alt="Isometric ${def.name.toLowerCase()}" /></div><div class="operational ${selected.enabled && selected.condition === 100 && !selected.crop?.failed ? '' : 'idle'}">${icon(selected.condition < 100 || selected.crop?.failed ? 'warning' : selected.enabled ? 'check-circle' : 'pause-circle')}${buildingStatus(selected)}</div><p class="building-description">${def.description}</p>${buildingSurvivalDetails(selected, state)}${supportDetails(selected, state)}${logisticsDetails(selected, state)}${templeDetails(selected, state)}${selected.kind === 'baray' ? `<div class="stat-heading"><span>Water stored</span><strong>${Math.round(fill)}%</strong></div><div class="water-meter"><span style="width:${fill}%"></span></div><div class="water-volume">${fmt(volume * 40)} <span>/ ${fmt(def.size * def.size * 6 * 40)} m³</span></div><div class="detail-row"><span>${icon('cloud-rain')}Current season</span><strong>${SeasonManager.at(state.day).name}</strong></div><div class="detail-row"><span>${icon('plant')}Irrigated fields</span><strong>${state.buildings.filter((b) => b.kind === 'paddy' && !b.construction && WaterSimulation.irrigation(state, b.x, b.y) > 0.2).length} fields</strong></div>` : `<div class="detail-row"><span>${icon('users')}Workers</span><strong>${def.workers}</strong></div>${def.production ? `<div class="detail-row"><span>${icon(RESOURCE_INFO[def.production.resource].icon)}Potential / cycle</span><strong>+${fmt(Logistics.outputs(state).get(selected.id) ?? 0)} ${RESOURCE_INFO[def.production.resource].name.toLowerCase()}</strong></div>` : ''}${selected.kind === 'paddy' ? `<div class="detail-row"><span>${icon('drop')}Irrigation</span><strong>${Math.round(irrigated * 100)}%</strong></div>` : ''}${selected.stock ? `<div class="detail-row"><span>Awaiting transport</span><strong>${fmt(selected.stock)}</strong></div>` : ''}`}${selected.kind === 'temple' ? `<div class="temple-stages">${['Laterite foundation', 'Sandstone towers', 'Sculpted reliefs'].map((s, i) => `<span class="${i < selected.level ? 'done' : ''}">${icon(i < selected.level ? 'check-circle' : 'circle')}${s}</span>`).join('')}</div>${templeUpgradeButton(selected, state)}` : ''}${!['baray', 'canal', 'moat', 'house', 'road', 'bridge'].includes(selected.kind) ? `<button class="secondary-button full-width" data-action="toggle-building">${icon(selected.enabled ? 'pause' : 'play')}${selected.kind === 'gate' ? (selected.enabled ? 'Close floodgate' : 'Open floodgate') : ['granary', 'workshop', 'warehouse'].includes(selected.kind) ? (selected.enabled ? 'Pause service' : 'Resume service') : selected.enabled ? 'Pause production' : 'Resume production'}</button>` : ''}<button class="remove-structure full-width" data-action="remove-structure" data-id="${selected.id}" aria-label="Remove structure">${icon('trash')}Remove structure<span>Review refund</span></button>`,
+        `<div class="panel-eyebrow">${def.category === 'water' ? 'Water management' : def.category === 'production' ? 'Production' : def.category === 'infrastructure' ? 'Paths & bridges' : 'Civic life'}<button class="icon-button" data-action="close-inspector" aria-label="Close building details">${icon('x')}</button></div><h2>${selected.kind === 'baray' ? 'Royal Baray' : def.name}</h2><p class="panel-subtitle">${def.subtitle}</p><div class="inspector-art"><img src="${this.renderer.atlas.thumbnail(selected.kind)}" alt="Isometric ${def.name.toLowerCase()}" /></div><div class="operational ${selected.enabled && selected.condition === 100 && !selected.crop?.failed ? '' : 'idle'}">${icon(selected.condition < 100 || selected.crop?.failed ? 'warning' : selected.enabled ? 'check-circle' : 'pause-circle')}${buildingStatus(selected)}</div><p class="building-description">${def.description}</p>${buildingSurvivalDetails(selected, state)}${supportDetails(selected, state)}${logisticsDetails(selected, state)}${templeDetails(selected, state)}${selected.kind === 'baray' ? `<div class="stat-heading"><span>Water stored</span><strong>${Math.round(fill)}%</strong></div><div class="water-meter"><span style="width:${fill}%"></span></div><div class="water-volume">${fmt(volume * 40)} <span>/ ${fmt(def.size * def.size * 6 * 40)} m³</span></div><div class="detail-row"><span>${icon('cloud-rain')}Current season</span><strong>${SeasonManager.at(state.day).name}</strong></div><div class="detail-row"><span>${icon('plant')}Irrigated fields</span><strong>${state.buildings.filter((b) => b.kind === 'paddy' && !b.construction && WaterSimulation.irrigation(state, b.x, b.y) > 0.2).length} fields</strong></div>${reservoirHistoryChart(state, selected)}` : `<div class="detail-row"><span>${icon('users')}Workers</span><strong>${def.workers}</strong></div>${def.production ? `<div class="detail-row"><span>${icon(RESOURCE_INFO[def.production.resource].icon)}Potential / cycle</span><strong>+${fmt(Logistics.outputs(state).get(selected.id) ?? 0)} ${RESOURCE_INFO[def.production.resource].name.toLowerCase()}</strong></div>` : ''}${selected.kind === 'paddy' ? `<div class="detail-row"><span>${icon('drop')}Irrigation</span><strong>${Math.round(irrigated * 100)}%</strong></div>` : ''}${selected.stock ? `<div class="detail-row"><span>Awaiting transport</span><strong>${fmt(selected.stock)}</strong></div>` : ''}`}${selected.kind === 'temple' ? `<div class="temple-stages">${['Laterite foundation', 'Sandstone towers', 'Sculpted reliefs'].map((s, i) => `<span class="${i < selected.level ? 'done' : ''}">${icon(i < selected.level ? 'check-circle' : 'circle')}${s}</span>`).join('')}</div>${templeUpgradeButton(selected, state)}` : ''}${!['baray', 'canal', 'moat', 'house', 'road', 'bridge'].includes(selected.kind) ? `<button class="secondary-button full-width" data-action="toggle-building">${icon(selected.enabled ? 'pause' : 'play')}${selected.kind === 'gate' ? (selected.enabled ? 'Close floodgate' : 'Open floodgate') : ['granary', 'workshop', 'warehouse'].includes(selected.kind) ? (selected.enabled ? 'Pause service' : 'Resume service') : selected.enabled ? 'Pause production' : 'Resume production'}</button>` : ''}<button class="remove-structure full-width" data-action="remove-structure" data-id="${selected.id}" aria-label="Remove structure">${icon('trash')}Remove structure<span>Review refund</span></button>`,
       );
       return;
     }
@@ -808,7 +816,7 @@ export class HUD {
       );
       const stored = channels.reduce((n, t) => n + t.water, 0);
       this.renderInspector(
-        `<div class="panel-eyebrow">Hydraulic network ${icon('waves')}</div><h2>Water is life.</h2>${playerFeedback(state)}${waterWarnings(state)}<p class="panel-subtitle">Guide it wisely through your kingdom.</p><div class="big-stat">${fmt(stored * 40)}<small>m³ in reservoirs & canals</small></div><div class="detail-row"><span>Reservoirs</span><strong>${state.buildings.filter((b) => b.kind === 'baray' && !b.construction).length}</strong></div><div class="detail-row"><span>Canal tiles</span><strong>${state.tiles.filter((t) => t.terrain === 'canal').length}</strong></div><div class="detail-row"><span>Irrigated fields</span><strong>${state.buildings.filter((b) => b.kind === 'paddy' && !b.construction && WaterSimulation.irrigation(state, b.x, b.y) > 0.2).length}</strong></div><p class="building-description">The blue overlay reveals water depth. Low land fills first; connected canals carry water and stone through the city.</p><button class="primary-button" data-action="water-buildings">${icon('plus')}Build a reservoir</button>`,
+        `<div class="panel-eyebrow">Hydraulic network ${icon('waves')}</div><h2>Water is life.</h2>${waterPlanningTools()}${reservoirList(state)}${playerFeedback(state)}${waterWarnings(state)}<p class="panel-subtitle">Guide it wisely through your kingdom.</p><div class="big-stat">${fmt(stored * 40)}<small>m³ in reservoirs & canals</small></div><div class="detail-row"><span>Reservoirs</span><strong>${state.buildings.filter((b) => b.kind === 'baray' && !b.construction).length}</strong></div><div class="detail-row"><span>Canal tiles</span><strong>${state.tiles.filter((t) => t.terrain === 'canal').length}</strong></div><div class="detail-row"><span>Irrigated fields</span><strong>${state.buildings.filter((b) => b.kind === 'paddy' && !b.construction && WaterSimulation.irrigation(state, b.x, b.y) > 0.2).length}</strong></div><p class="building-description">Use depth, flow, and elevation overlays to plan connections. Low land fills first; connected canals carry water and stone through the city.</p><button class="primary-button" data-action="water-buildings">${icon('plus')}Build a reservoir</button>`,
       );
     } else if (this.panel === 'workforce') {
       this.renderInspector(logisticsPanel(state));
@@ -856,12 +864,31 @@ export class HUD {
       sameView && this.inspector.contains(document.activeElement)
         ? (document.activeElement as HTMLElement)
         : null;
+    const histories = sameView
+      ? Array.from(
+          this.inspector.querySelectorAll<HTMLDetailsElement>('[data-reservoir-history]'),
+        ).map((d) => [d.dataset.reservoirHistory!, d.open] as const)
+      : [];
+    const focusedHistory = focused?.closest<HTMLElement>('[data-reservoir-history]')?.dataset
+      .reservoirHistory;
+    const focusedOverlay = focused?.dataset.overlay;
     const action = focused?.dataset.action;
     const id = focused?.dataset.id;
     const kind = focused?.dataset.kind;
     const panel = focused?.dataset.panel;
     const chapter = focused?.closest<HTMLElement>('[data-commission-id]')?.dataset.commissionId;
     this.inspector.innerHTML = markup;
+    for (const [id, open] of histories) {
+      const details = this.inspector.querySelector<HTMLDetailsElement>(
+        `[data-reservoir-history="${id}"]`,
+      );
+      if (details) details.open = open;
+    }
+    this.inspector.querySelectorAll<HTMLElement>('[data-action="overlay"]').forEach((button) => {
+      const active = button.dataset.overlay === this.overlay;
+      button.setAttribute('aria-pressed', String(active));
+      button.classList.toggle('active', active);
+    });
     this.inspectorViewKey = key;
     for (const [id, open] of chapters) {
       const details = this.inspector.querySelector<HTMLDetailsElement>(
@@ -878,9 +905,14 @@ export class HUD {
           b.dataset.action === action &&
           b.dataset.id === id &&
           b.dataset.kind === kind &&
-          b.dataset.panel === panel,
+          b.dataset.panel === panel &&
+          b.dataset.overlay === focusedOverlay,
       );
       replacement?.focus({ preventScroll: true });
+    } else if (focusedHistory) {
+      this.inspector
+        .querySelector<HTMLElement>(`[data-reservoir-history="${focusedHistory}"] > summary`)
+        ?.focus({ preventScroll: true });
     } else if (chapter) {
       this.inspector
         .querySelector<HTMLElement>(`[data-commission-id="${chapter}"] > summary`)
@@ -968,7 +1000,7 @@ export class HUD {
     this.dialogResumeSpeed = this.game.state.speed;
     this.game.setSpeed(0);
     dialog.setAttribute('aria-label', kind === 'guide' ? 'Builder’s guide' : 'Game settings');
-    dialog.innerHTML = `<button class="dialog-close icon-button" data-action="close-dialog" aria-label="Close dialog">${icon('x')}</button>${kind === 'guide' ? `<div class="dialog-symbol">${icon('book-open-text')}</div><span class="eyebrow">The royal builder’s guide</span><h2>Every great city<br>begins with water.</h2><p>Capture the monsoon in barays, connect your fields with canals, and turn a flourishing settlement into a temple city.</p><div class="guide-steps"><div>${icon('waves')}<span><strong>Capture & connect</strong>Build reservoirs on clear land. Join them to a river or a filled canal so water can flow. Drag roads or canals to preview a route and its total cost, then release to build. Existing matching tiles are free; blocked or unaffordable routes spend nothing. Press Escape to cancel, or middle-drag / use arrow keys to pan.</span></div><div>${icon('grains')}<span><strong>Grow & sustain</strong>Irrigate paddies within two tiles of water. Workers bring rice and timber home over dry land. Roads speed up deliveries; timber bridges span waterways. Drought stress reaches crop failure at 70%; restore irrigation before harvests are lost.</span></div><div>${icon('bank')}<span><strong>Build & remember</strong>Connect quarries to river landings by water. Assign builders to each site. Follow the five royal commissions to earn rewards. At 200 merit unlock granaries; at 600 unlock workshops and sculpted sanctuaries.</span></div><div>${icon('warehouse')}<span><strong>Store & deliver</strong>Warehouses receive land cargo, expand storage, and add two carts when staffed. A staffed landing supplies one stone barge. Laterite comes from dedicated pits. Use Resources (R) to find finite mineral deposits and timber. People & logistics explains blocked deliveries.</span></div><div>${icon('bowl-food')}<span><strong>Weather & survive</strong>Feed residents daily. Hunger slows all work and prolonged shortages drive people away. Inspect Food & resilience for risks; repair flooded structures after water recedes.</span></div></div><button class="primary-button full-width" data-action="tutorial-start">Start or restart interactive tutorial</button><div class="keyboard-guide"><span><kbd>Space</kbd>Pause</span><span><kbd>1</kbd>–<kbd>6</kbd>Build</span><span><kbd>W</kbd>Water</span><span><kbd>L</kbd>Logistics</span><span><kbd>R</kbd>Resources</span><span><kbd>G</kbd>Grid</span><span><kbd>X</kbd>Demolish</span><span><kbd>Esc</kbd>Cancel</span></div><button class="primary-button full-width" data-action="close-dialog">Begin your legacy ${icon('arrow-right')}</button>` : `<div class="dialog-symbol">${icon('sliders-horizontal')}</div><span class="eyebrow">Make yourself at home</span><h2>Your kingdom,<br>your way.</h2><p>Your city is saved automatically every 30 seconds in this browser. Download a copy to keep it with you.</p><div class="settings-row"><span><strong>Evening colors</strong><small>A softer glow after sunset</small></span><button class="theme-switch" role="switch" aria-label="Evening colors" aria-checked="${document.documentElement.dataset.theme === 'dark'}" data-action="theme"><span></span></button></div><div class="settings-buttons"><button class="secondary-button" data-action="export">${icon('download-simple')}Download save</button><button class="secondary-button" data-action="import">${icon('upload-simple')}Import save</button></div><button class="secondary-button full-width" data-action="save">${icon('floppy-disk')}Save kingdom now</button><button class="secondary-button full-width return-menu" data-action="return-menu">${icon('sign-out')}Save & return to main menu</button><div class="reset-section"><button class="text-button" data-action="reset">Start a new settlement</button><div id="reset-confirm" hidden><p>This replaces the city saved in this browser. Download a copy first if you want to keep it.</p><div class="settings-buttons"><button class="secondary-button" data-action="cancel-reset">Keep this city</button><button class="danger-button" data-action="confirm-reset">Start fresh</button></div></div></div>`}`;
+    dialog.innerHTML = `<button class="dialog-close icon-button" data-action="close-dialog" aria-label="Close dialog">${icon('x')}</button>${kind === 'guide' ? `<div class="dialog-symbol">${icon('book-open-text')}</div><span class="eyebrow">The royal builder’s guide</span><h2>Every great city<br>begins with water.</h2><p>Capture the monsoon in barays, connect your fields with canals, and turn a flourishing settlement into a temple city.</p><div class="guide-steps"><div>${icon('waves')}<span><strong>Capture & connect</strong>Build reservoirs on clear land. Join them to a river or a filled canal so water can flow. Use Flow (F) to see expected pressure-driven outflow and Elevation (E) to compare ground heights. Tap tiles for depth and surface levels; inspect a baray for its last 60 daily readings. Drag roads or canals to preview a route and its total cost, then release to build. Existing matching tiles are free; blocked or unaffordable routes spend nothing. Press Escape to cancel, or middle-drag / use arrow keys to pan.</span></div><div>${icon('grains')}<span><strong>Grow & sustain</strong>Irrigate paddies within two tiles of water. Workers bring rice and timber home over dry land. Roads speed up deliveries; timber bridges span waterways. Drought stress reaches crop failure at 70%; restore irrigation before harvests are lost.</span></div><div>${icon('bank')}<span><strong>Build & remember</strong>Connect quarries to river landings by water. Assign builders to each site. Follow the five royal commissions to earn rewards. At 200 merit unlock granaries; at 600 unlock workshops and sculpted sanctuaries.</span></div><div>${icon('warehouse')}<span><strong>Store & deliver</strong>Warehouses receive land cargo, expand storage, and add two carts when staffed. A staffed landing supplies one stone barge. Laterite comes from dedicated pits. Use Resources (R) to find finite mineral deposits and timber. People & logistics explains blocked deliveries.</span></div><div>${icon('bowl-food')}<span><strong>Weather & survive</strong>Feed residents daily. Hunger slows all work and prolonged shortages drive people away. Inspect Food & resilience for risks; repair flooded structures after water recedes.</span></div></div><button class="primary-button full-width" data-action="tutorial-start">Start or restart interactive tutorial</button><div class="keyboard-guide"><span><kbd>Space</kbd>Pause</span><span><kbd>1</kbd>–<kbd>6</kbd>Build</span><span><kbd>W</kbd>Water</span><span><kbd>L</kbd>Logistics</span><span><kbd>R</kbd>Resources</span><span><kbd>G</kbd>Grid</span><span><kbd>X</kbd>Demolish</span><span><kbd>Esc</kbd>Cancel</span></div><button class="primary-button full-width" data-action="close-dialog">Begin your legacy ${icon('arrow-right')}</button>` : `<div class="dialog-symbol">${icon('sliders-horizontal')}</div><span class="eyebrow">Make yourself at home</span><h2>Your kingdom,<br>your way.</h2><p>Your city is saved automatically every 30 seconds in this browser. Download a copy to keep it with you.</p><div class="settings-row"><span><strong>Evening colors</strong><small>A softer glow after sunset</small></span><button class="theme-switch" role="switch" aria-label="Evening colors" aria-checked="${document.documentElement.dataset.theme === 'dark'}" data-action="theme"><span></span></button></div><div class="settings-buttons"><button class="secondary-button" data-action="export">${icon('download-simple')}Download save</button><button class="secondary-button" data-action="import">${icon('upload-simple')}Import save</button></div><button class="secondary-button full-width" data-action="save">${icon('floppy-disk')}Save kingdom now</button><button class="secondary-button full-width return-menu" data-action="return-menu">${icon('sign-out')}Save & return to main menu</button><div class="reset-section"><button class="text-button" data-action="reset">Start a new settlement</button><div id="reset-confirm" hidden><p>This replaces the city saved in this browser. Download a copy first if you want to keep it.</p><div class="settings-buttons"><button class="secondary-button" data-action="cancel-reset">Keep this city</button><button class="danger-button" data-action="confirm-reset">Start fresh</button></div></div></div>`}`;
     dialog.showModal();
   }
   destroy() {

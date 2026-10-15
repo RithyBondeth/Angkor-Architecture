@@ -1,3 +1,4 @@
+import { waterFluxes } from './waterFlow';
 import type { GameState } from '../core/types';
 import { SeasonManager } from '../core/SeasonManager';
 
@@ -7,37 +8,9 @@ export class WaterSimulation {
   step(state: GameState, weather = true): void {
     if (this.delta.length !== state.tiles.length) this.delta = new Float64Array(state.tiles.length);
     this.delta.fill(0);
-    const gateResistance = new Map<number, number>();
-    for (const b of state.buildings)
-      if (b.kind === 'gate' && b.construction?.type !== 'build' && b.condition > 0 && !b.enabled)
-        gateResistance.set(b.y * state.width + b.x, 0.02);
-    for (let i = 0; i < state.tiles.length; i++) {
-      const tile = state.tiles[i]!;
-      if (tile.water <= 0) continue;
-      const adjacent = [
-        tile.x > 0 ? i - 1 : -1,
-        tile.x < state.width - 1 ? i + 1 : -1,
-        tile.y > 0 ? i - state.width : -1,
-        tile.y < state.height - 1 ? i + state.width : -1,
-      ];
-      const flows: { index: number; amount: number }[] = [];
-      let total = 0;
-      for (const j of adjacent) {
-        const neighbor = state.tiles[j];
-        if (!neighbor) continue;
-        const difference = tile.elevation + tile.water - neighbor.elevation - neighbor.water;
-        if (difference <= 0.01) continue;
-        const permeability = Math.min(gateResistance.get(i) ?? 1, gateResistance.get(j) ?? 1);
-        const amount = difference * 0.12 * permeability;
-        total += amount;
-        flows.push({ index: j, amount });
-      }
-      const scale = total > tile.water * 0.5 ? (tile.water * 0.5) / total : 1;
-      for (const flow of flows) {
-        const amount = flow.amount * scale;
-        this.delta[i]! -= amount;
-        this.delta[flow.index]! += amount;
-      }
+    for (const flow of waterFluxes(state)) {
+      this.delta[flow.from]! -= flow.amount;
+      this.delta[flow.to]! += flow.amount;
     }
     const season = SeasonManager.at(state.day);
     for (let i = 0; i < state.tiles.length; i++) {
