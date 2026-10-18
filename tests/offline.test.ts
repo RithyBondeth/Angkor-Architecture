@@ -25,9 +25,21 @@ function harness(version = 'new', assets = ['/index.html', '/assets/game.js', '/
       return {
         addAll: async (requests: Request[]) => {
           if (failDownload) throw Error('offline');
-          for (const request of requests) data.set(url(request), new Response(request.url));
+          for (const request of requests)
+            data.set(url(request), new Response(request.url, { headers: { Vary: 'Origin' } }));
         },
-        match: async (request: string | Request) => data.get(url(request)),
+        match: async (request: string | Request, options?: CacheQueryOptions) => {
+          const response = data.get(url(request));
+          // Match browser CacheStorage behavior when precaching has no Origin header.
+          if (
+            response?.headers.get('Vary') === 'Origin' &&
+            !options?.ignoreVary &&
+            typeof request !== 'string' &&
+            request.headers.has('Origin')
+          )
+            return undefined;
+          return response;
+        },
       };
     },
   };
@@ -129,6 +141,17 @@ describe('offline shell lifecycle', () => {
       request: new Request('https://game.test/art/temple.png'),
     });
     expect(await asset!.text()).toBe('https://game.test/art/temple.png');
+    expect(worker.fetch).not.toHaveBeenCalled();
+  });
+  it('uses public precached modules even when Vary: Origin differs from install requests', async () => {
+    const worker = harness();
+    await worker.event('install');
+    const module = await worker.event('fetch', {
+      request: new Request('https://game.test/assets/game.js', {
+        headers: { Origin: 'https://game.test' },
+      }),
+    });
+    expect(await module!.text()).toBe('https://game.test/assets/game.js');
     expect(worker.fetch).not.toHaveBeenCalled();
   });
   it('serves previous hashed assets to old tabs and leaves unrelated requests alone', async () => {
