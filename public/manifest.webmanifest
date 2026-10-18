@@ -1,0 +1,17 @@
+{
+  "id": "/",
+  "name": "Angkor Architect",
+  "short_name": "Angkor",
+  "description": "Build a kingdom, guide the waters, and raise the temples of Angkor. Play offline after the first download.",
+  "lang": "en",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fff8e6",
+  "theme_color": "#a4ca88",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -8,6 +8,7 @@ import '@fontsource/cormorant-garamond/500.css';
 import '@fontsource/cormorant-garamond/600.css';
 import '@phosphor-icons/web/regular/style.css';
 import './ui/styles.css';
+import { OfflineApp } from './pwa/OfflineApp';
 import { AudioController } from './audio/AudioController';
 import { Game } from './core/Game';
 import { GameLoop } from './core/GameLoop';
@@ -24,6 +25,7 @@ async function main() {
   const root = document.querySelector<HTMLElement>('#app')!;
   const persistence = new Persistence();
   const audio = new AudioController(root);
+  const offline = new OfflineApp(root);
   const choice = await showWelcome(root, persistence, audio);
   createShell(root);
   document.title = `${persistence.activeName} | Angkor Architect`;
@@ -47,6 +49,9 @@ async function main() {
   const loop = new GameLoop(game, (interpolation, elapsed) =>
     renderer.render(interpolation, elapsed),
   );
+  offline.setBeforeReload(async () => {
+    await persistence.save(game.state);
+  });
   loop.start();
   const autosave = window.setInterval(() => void hud.save(true), CONFIG.autosaveMs);
   const backup = () => {
@@ -64,6 +69,7 @@ async function main() {
       loop.stop();
       hud.destroy();
       audio.destroy();
+      offline.destroy();
       renderer.destroy();
       window.removeEventListener('pagehide', backup);
       document.removeEventListener('visibilitychange', onVisibility);
