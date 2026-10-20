@@ -1,3 +1,6 @@
+import { collectMilestones, initializeMilestones } from './milestones';
+import { commissionsFor } from '../data/scenarios';
+import { placementAdvice } from '../simulation/PlacementAdvice';
 import type { GameEvent } from './gameEvents';
 import { recordReservoirHistory } from '../simulation/ReservoirHistory';
 import { orthogonalRoute } from './buildRoute';
@@ -45,6 +48,7 @@ export class Game {
   private readonly listeners = new Set<() => void>();
   private readonly eventListeners = new Set<(event: GameEvent) => void>();
   constructor(public state: GameState) {
+    initializeMilestones(state);
     recordReservoirHistory(state);
   }
   subscribe(listener: () => void) {
@@ -64,6 +68,7 @@ export class Game {
     for (const listener of this.listeners) listener();
   }
   step() {
+    const previousCommissions = this.state.progression.claimed.length;
     const oldSeason = SeasonManager.at(this.state.day).wet;
     this.state.tick++;
     if (this.state.tick % CONFIG.ticksPerDay === 0) this.state.day++;
@@ -89,6 +94,26 @@ export class Game {
       );
     }
     for (const e of this.progression.step(this.state)) this.log(e.title, e.text, e.icon);
+    for (const notice of collectMilestones(
+      this.state,
+      !oldSeason && SeasonManager.at(this.state.day).wet,
+    )) {
+      this.log(notice.title, notice.text, notice.icon);
+      this.emit({ type: 'milestone', ...notice });
+    }
+    if (
+      this.state.progression.claimed.length > previousCommissions &&
+      this.state.progression.claimed.length < commissionsFor(this.state).length
+    ) {
+      const commission = commissionsFor(this.state)[previousCommissions]!;
+      this.emit({
+        type: 'milestone',
+        id: 'commission',
+        title: commission.title,
+        text: 'Royal commission fulfilled. Your reward is in the kingdom’s stores.',
+        icon: 'seal-check',
+      });
+    }
     this.notify();
   }
   setSpeed(speed: 0 | 1 | 2 | 4) {
@@ -183,6 +208,10 @@ export class Game {
       ok: true,
       message: `Click to start ${def.name.toLowerCase()}${workforce(this.state).available === 0 ? ' (waiting for builders)' : ''}.`,
     };
+  }
+  previewPlacement(kind: BuildingKind, p: Point) {
+    const result = this.canPlace(kind, p);
+    return { ...result, advice: result.ok ? placementAdvice(this.state, kind, p) : [] };
   }
   private project(
     type: ConstructionProject['type'],

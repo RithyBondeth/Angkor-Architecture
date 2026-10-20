@@ -22,9 +22,15 @@ function cameraFixture(building = true) {
   const gesture = { start: vi.fn(() => building), move: vi.fn(), end: vi.fn(), cancel: vi.fn() };
   const click = vi.fn();
   const camera = new Camera(world, surface, click, vi.fn(), vi.fn(), gesture);
-  const pointer = (type: string, x = 100, y = 100, id = 1, button = 0) =>
+  const pointer = (type: string, x = 100, y = 100, id = 1, button = 0, pointerType = 'mouse') =>
     surface.dispatchEvent(
-      Object.assign(new Event(type), { clientX: x, clientY: y, pointerId: id, button }),
+      Object.assign(new Event(type), {
+        clientX: x,
+        clientY: y,
+        pointerId: id,
+        button,
+        pointerType,
+      }),
     );
   return { camera, world, gesture, click, pointer, captured };
 }
@@ -101,5 +107,54 @@ describe('camera build gestures', () => {
     expect(f.gesture.start).toHaveBeenCalledExactlyOnceWith(90, 80);
     expect(f.gesture.end).toHaveBeenCalledExactlyOnceWith(90, 80);
     f.camera.destroy();
+  });
+});
+
+describe('touch camera gestures', () => {
+  it('taps to preview and drags to pan without ever committing a mouse build gesture', () => {
+    const f = cameraFixture();
+    f.pointer('pointerdown', 100, 100, 1, 0, 'touch');
+    f.pointer('pointerup', 100, 100, 1, 0, 'touch');
+    expect(f.click).toHaveBeenCalledExactlyOnceWith(90, 80, true);
+    expect(f.gesture.start).not.toHaveBeenCalled();
+    f.pointer('pointerdown', 100, 100, 1, 0, 'touch');
+    f.pointer('pointermove', 150, 140, 1, 0, 'touch');
+    f.pointer('pointerup', 150, 140, 1, 0, 'touch');
+    expect(f.world.x).toBe(50);
+    expect(f.click).toHaveBeenCalledOnce();
+    expect(f.gesture.end).not.toHaveBeenCalled();
+    f.camera.destroy();
+  });
+  it('pinches around the moving midpoint and suppresses accidental taps until both fingers lift', () => {
+    const f = cameraFixture();
+    f.pointer('pointerdown', 100, 100, 1, 0, 'touch');
+    f.pointer('pointerdown', 200, 100, 2, 0, 'touch');
+    const zoom = f.camera.zoom;
+    f.pointer('pointermove', 300, 100, 2, 0, 'touch');
+    expect(f.camera.zoom).toBeGreaterThan(zoom);
+    expect(f.gesture.cancel).toHaveBeenCalledOnce();
+    f.pointer('pointerup', 300, 100, 2, 0, 'touch');
+    f.pointer('pointermove', 120, 100, 1, 0, 'touch');
+    f.pointer('pointerup', 120, 100, 1, 0, 'touch');
+    expect(f.click).not.toHaveBeenCalled();
+    expect(f.gesture.end).not.toHaveBeenCalled();
+    expect(f.captured.size).toBe(0);
+    f.pointer('pointerdown', 120, 100, 1, 0, 'touch');
+    f.pointer('pointerup', 120, 100, 1, 0, 'touch');
+    expect(f.click).toHaveBeenCalledOnce();
+    f.camera.destroy();
+  });
+  it('cleans up all touch captures on cancellation and viewport changes', () => {
+    for (const action of ['pointercancel', 'zoom']) {
+      const f = cameraFixture();
+      f.pointer('pointerdown', 100, 100, 1, 0, 'touch');
+      f.pointer('pointerdown', 200, 100, 2, 0, 'touch');
+      if (action === 'zoom') f.camera.setZoom(1);
+      else f.pointer('pointercancel', 100, 100, 1, 0, 'touch');
+      f.pointer('pointerup', 200, 100, 2, 0, 'touch');
+      expect(f.captured.size).toBe(0);
+      expect(f.click).not.toHaveBeenCalled();
+      f.camera.destroy();
+    }
   });
 });

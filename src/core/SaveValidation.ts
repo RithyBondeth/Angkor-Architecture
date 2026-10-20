@@ -1,3 +1,4 @@
+import { MILESTONE_IDS } from './milestones';
 import { RESERVOIR_HISTORY_DAYS } from '../simulation/ReservoirHistory';
 import { BUILDINGS } from '../data/buildings';
 import { CONFIG } from '../data/config';
@@ -25,6 +26,14 @@ const record = (n: unknown): n is Record<string, unknown> =>
 function validateShape(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 = 6): boolean {
   if (!record(value)) return false;
   const s = value as unknown as GameState;
+  if (
+    value.milestones !== undefined &&
+    (!Array.isArray(value.milestones) ||
+      value.milestones.length > MILESTONE_IDS.length ||
+      new Set(value.milestones).size !== value.milestones.length ||
+      !value.milestones.every((id) => MILESTONE_IDS.includes(id)))
+  )
+    return false;
   if (value.scenario !== undefined && !isScenarioId(value.scenario)) return false;
   if (value.tutorial !== undefined) {
     const t = value.tutorial;

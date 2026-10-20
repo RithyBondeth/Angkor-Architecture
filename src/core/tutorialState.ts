@@ -1,4 +1,4 @@
-import type { GameState, TutorialState } from './types';
+import type { BuildingKind, GameState, TutorialState } from './types';
 import { WaterSimulation } from '../simulation/WaterSimulation';
 
 export function freshTutorial(): TutorialState {
@@ -12,10 +12,22 @@ export function freshTutorial(): TutorialState {
   };
 }
 
+/** A new lesson leaves time stopped until the player is ready to run it. */
+export function startTutorial(state: GameState): void {
+  state.tutorial = freshTutorial();
+  state.speed = 0;
+}
+
+export function tutorialBuildings(state: GameState): readonly BuildingKind[] | null {
+  if (state.tutorial?.status !== 'active') return null;
+  return state.tutorial.step < 2 ? ['canal', 'baray'] : ['canal', 'paddy', 'baray'];
+}
+
 /** Remember milestones, but recover gracefully if the player's teaching site is removed. */
 export function advanceTutorial(state: GameState): void {
   const t = state.tutorial;
   if (!t || t.status !== 'active') return;
+  const previousStep = t.step;
   const canal = state.buildings.find((b) => b.id === t.canalId);
   const paddy = state.buildings.find((b) => b.id === t.paddyId);
   if (t.step === 1 && t.canalId && !canal) t.canalId = null;
@@ -54,6 +66,7 @@ export function advanceTutorial(state: GameState): void {
     t.step = 6;
     t.status = 'completed';
   }
+  if (t.step !== previousStep && t.status === 'active') state.speed = 0;
 }
 
 export function inspectTutorialSite(state: GameState, id: string | null): void {

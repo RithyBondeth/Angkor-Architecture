@@ -1,3 +1,6 @@
+import { kingdomAlerts } from '../simulation/KingdomAlerts';
+import { kingdomSummary } from './LegacyUI';
+import { Celebrations } from './Celebrations';
 import { offlineSettings } from '../pwa/OfflineApp';
 import { kingdomNameInput } from './SaveSlotsUI';
 import type { AudioController } from '../audio/AudioController';
@@ -5,7 +8,7 @@ import { scenarioFor } from '../data/scenarios';
 import { scenarioPicker, selectedScenario, updateScenarioDetails } from './ScenarioSelection';
 import { waterPlanningTools, reservoirHistoryChart, reservoirList } from './WaterPlanningUI';
 import { isRouteKind } from '../core/buildRoute';
-import { freshTutorial, inspectTutorialSite } from '../core/tutorialState';
+import { startTutorial, tutorialBuildings, inspectTutorialSite } from '../core/tutorialState';
 import { tutorialPanel } from './TutorialUI';
 import { neighbors } from '../core/world';
 import { BUILDINGS, BUILD_ORDER, RESOURCE_INFO } from '../data/buildings';
@@ -73,12 +76,18 @@ export class HUD {
   private overlay: Overlay = 'none';
   private toastTimer = 0;
   private tutorialStep = -1;
+  private fullTutorialCatalog = false;
+  private lastTutorialStatus = '';
   private lastSpeed: 1 | 2 | 4 = 1;
   private readonly abort = new AbortController();
   private readonly root: HTMLElement;
   private readonly inspector: HTMLElement;
   private readonly minimap: HTMLCanvasElement;
   private unsubscribe: () => void;
+  private readonly celebrations: Celebrations;
+  private readonly issueCursors = new Map<string, number>();
+  private activeIssue: string | null = null;
+  private readonly dockObserver: ResizeObserver;
   private lastMinimapTick = -1;
   private inspectorMarkup = '';
   private inspectorViewKey = '';
@@ -97,15 +106,30 @@ export class HUD {
     if (game.state.speed > 0) this.lastSpeed = game.state.speed as 1 | 2 | 4;
     this.inspector = this.root.querySelector('#inspector')!;
     this.minimap = this.root.querySelector('#minimap')!;
+    this.celebrations = new Celebrations(this.root.querySelector('#celebration')!, game);
+    const tray = this.root.querySelector<HTMLElement>('.build-tray')!;
+    this.dockObserver = new ResizeObserver(() => {
+      this.root
+        .querySelector<HTMLElement>('.game-shell')!
+        .style.setProperty('--dock-height', `${tray.offsetHeight}px`);
+    });
+    this.dockObserver.observe(tray);
     if (game.state.tutorial?.status === 'active') this.panel = 'tutorial';
     this.renderBuildMenu();
     this.bindEvents();
     this.unsubscribe = game.subscribe(() => this.update());
     renderer.onSelect = (id, placed) => {
+      this.activeIssue = null;
       this.selected = id;
       if (!placed) inspectTutorialSite(this.game.state, id);
-      this.setPanelOpen(!!id);
-      this.updateInspector();
+      if (placed && this.game.state.tutorial?.status === 'active') {
+        this.chooseBuilding(null);
+        this.showPanel('tutorial');
+      } else {
+        this.setPanelOpen(!!id && !placed);
+        this.updateInspector();
+      }
+      this.update();
     };
     renderer.onPlace = (message, ok) => {
       this.toast(message, !ok);
@@ -115,7 +139,12 @@ export class HUD {
     renderer.onRoutePreview = (preview) => {
       const banner = this.root.querySelector<HTMLElement>('#placement-banner')!;
       banner.classList.toggle('route-preview', !!preview);
+      if (preview) banner.classList.remove('has-warning');
       banner.classList.toggle('invalid', !!preview && !preview.ok);
+      const confirm = banner.querySelector<HTMLButtonElement>('[data-action="confirm-touch"]');
+      if (confirm && preview) confirm.disabled = !preview.ok;
+      const advice = banner.querySelector<HTMLElement>('.site-advice');
+      if (advice) advice.hidden = !!preview;
       const total = banner.querySelector<HTMLElement>('.route-total');
       if (total) {
         total.hidden = !preview;
@@ -131,16 +160,44 @@ export class HUD {
       if (status && preview)
         status.textContent = `${preview.newTiles} new · ${preview.existingTiles} existing · ${preview.message}`;
     };
-    renderer.onPreview = (message, ok) => {
+    renderer.onPreview = (message, ok, advice) => {
       const banner = this.root.querySelector<HTMLElement>('#placement-banner')!;
       banner.classList.toggle('invalid', !ok);
+      const confirm = banner.querySelector<HTMLButtonElement>('[data-action="confirm-touch"]');
+      if (confirm) confirm.disabled = !ok;
+      banner.classList.toggle('has-warning', ok && advice.some((item) => item.warning));
+      const notes = banner.querySelector<HTMLElement>('.site-advice');
+      if (notes) {
+        const markup = advice
+          .map(
+            (item) =>
+              `<span class="site-check ${item.warning ? 'warning' : ''}">${icon(item.warning ? 'warning' : 'check-circle')}${esc(item.message)}</span>`,
+          )
+          .join('');
+        if (notes.innerHTML !== markup) notes.innerHTML = markup;
+        notes.hidden = !advice.length;
+      }
       const status = banner.querySelector('small');
+      const touchControls = banner.querySelector<HTMLElement>('.touch-actions');
+      if (touchControls && !touchControls.hidden)
+        message = message.replace('Click to start', 'Confirm to start');
       if (status && this.placement)
         status.textContent = `${BUILDINGS[this.placement].size} × ${BUILDINGS[this.placement].size} · ${Object.entries(
           BUILDINGS[this.placement].cost,
         )
           .map(([r, n]) => `${n} ${r}`)
           .join(' + ')} · ${message}`;
+    };
+    renderer.onTouchPlan = (active) => {
+      const controls = this.root.querySelector<HTMLElement>('.touch-actions');
+      if (controls) controls.hidden = !active;
+      const note = this.root.querySelector<HTMLElement>('.preview-note');
+      if (note)
+        note.textContent = active
+          ? isRouteKind(this.placement)
+            ? 'Tap another tile to extend this route. Confirm to build; drag to pan.'
+            : 'Tap another site to compare. Confirm to build; drag to pan.'
+          : 'Tap a site to preview; drag to explore; pinch to zoom.';
     };
     renderer.onHover = (message) => {
       this.root.querySelector('#map-hint')!.textContent = message;
@@ -151,8 +208,12 @@ export class HUD {
     this.root.querySelector('#zoom-value')!.textContent =
       `${Math.round(renderer.camera.zoom * 100)}%`;
     renderer.onDemolish = (id) => this.openRemoval(id, false);
+    this.setBuildDock(false);
     this.update();
-    if (game.state.tutorial?.status === 'active') this.showPanel('tutorial');
+    if (game.state.tutorial?.status === 'active') {
+      this.showPanel('tutorial');
+      this.setBuildDock(false);
+    }
     if (matchMedia('(max-width: 600px)').matches && game.state.tutorial?.status !== 'active')
       this.setPanelOpen(false);
   }
@@ -172,11 +233,20 @@ export class HUD {
         const button = (e.target as Element).closest<HTMLElement>('[data-action]');
         if (!button) return;
         const action = button.dataset.action;
+        if (action === 'confirm-touch') this.renderer.confirmTouchPlacement();
+        if (action === 'clear-touch') this.renderer.cancelTouchPlacement();
+        if (action === 'milestone-dismiss') this.celebrations.dismiss();
+        if (action === 'kingdom-summary') this.openKingdomSummary();
+        if (action === 'locate-issue') this.locateIssue(button.dataset.issue!);
         if (action === 'tutorial-start') {
           this.chooseBuilding(null);
-          this.game.state.tutorial = freshTutorial();
+          startTutorial(this.game.state);
+          this.fullTutorialCatalog = false;
+          this.renderBuildMenu();
+          this.dialogResumeSpeed = null;
           this.root.querySelector<HTMLDialogElement>('dialog')!.close();
           this.showPanel('tutorial');
+          this.setBuildDock(false);
           this.game.notify();
           this.persistence.backup(this.game.state);
         }
@@ -192,6 +262,14 @@ export class HUD {
           this.game.notify();
         }
         if (action === 'tutorial-help') this.helpTutorial();
+        if (action === 'tutorial-resume') this.game.setSpeed(1);
+        if (action === 'tutorial-catalog') {
+          this.fullTutorialCatalog = !this.fullTutorialCatalog;
+          this.category = 'all';
+          this.chooseBuilding(null);
+          this.renderBuildMenu();
+          this.setBuildDock(true);
+        }
         if (action === 'excavate-moat') {
           const result = this.game.excavateMoat(button.dataset.id!);
           this.toast(result.message, !result.ok);
@@ -241,7 +319,7 @@ export class HUD {
               : this.game.demolish(id);
           this.root.querySelector<HTMLDialogElement>('dialog')!.close();
           this.selected = this.game.state.buildings.some((b) => b.id === id) ? id : null;
-          this.renderer.select(this.selected);
+          this.renderer.focusBuilding(this.selected!);
           this.setPanelOpen(true);
           this.updateInspector();
           this.toast(r.message, !r.ok);
@@ -272,14 +350,8 @@ export class HUD {
         }
         if (action === 'return-menu') void this.returnToMenu(button);
         if (action === 'toggle-build') {
-          const tray = this.root.querySelector<HTMLElement>('.build-tray')!;
-          const collapsed = tray.classList.toggle('collapsed');
-          button.setAttribute('aria-expanded', String(!collapsed));
-          button.setAttribute(
-            'aria-label',
-            collapsed ? 'Show building dock' : 'Hide building dock',
-          );
-          if (collapsed) this.chooseBuilding(null);
+          const open = this.root.querySelector('.build-tray')!.classList.contains('collapsed');
+          this.setBuildDock(open);
         }
         if (action === 'panel') this.showPanel(button.dataset.panel as Panel);
         if (action === 'cancel-build') this.chooseBuilding(null);
@@ -321,7 +393,7 @@ export class HUD {
         if (action === 'select-building') {
           this.selected = button.dataset.id!;
           inspectTutorialSite(this.game.state, this.selected);
-          this.renderer.select(this.selected);
+          this.renderer.focusBuilding(this.selected!);
           this.setPanelOpen(true);
           this.updateInspector();
         }
@@ -462,6 +534,7 @@ export class HUD {
           this.dialogResumeSpeed = null;
           this.game.setSpeed(speed);
         }
+        if (this.celebrations.pendingSummary) this.update();
       },
       { signal: this.abort.signal },
     );
@@ -492,13 +565,67 @@ export class HUD {
     dialog.setAttribute('aria-label', 'Review demolition and material refund');
     dialog.showModal();
   }
+  private locateIssue(id: string) {
+    const alert = kingdomAlerts(this.game.state).find((item) => item.id === id);
+    if (!alert) {
+      this.toast('This issue has been resolved.');
+      return;
+    }
+    this.chooseBuilding(null);
+    this.showPanel(alert.panel);
+    this.activeIssue = alert.id;
+    if (alert.sites.length) {
+      const index = (this.issueCursors.get(id) ?? 0) % alert.sites.length;
+      this.issueCursors.set(id, index + 1);
+      this.selected = alert.sites[index]!;
+      this.renderer.focusBuilding(this.selected);
+      this.updateInspector();
+      this.toast(`Site ${index + 1} of ${alert.sites.length} · ${alert.remedy}`);
+    }
+  }
+  private openKingdomSummary() {
+    const dialog = this.root.querySelector<HTMLDialogElement>('dialog')!;
+    if (dialog.open) {
+      this.celebrations.pendingSummary = true;
+      return;
+    }
+    this.renderer.camera.cancelGesture();
+    this.dialogResumeSpeed = this.game.state.speed;
+    this.game.setSpeed(0);
+    dialog.innerHTML = `<button class="dialog-close icon-button" data-action="close-dialog" aria-label="Close kingdom summary">${icon('x')}</button>${kingdomSummary(this.game.state)}<button class="primary-button full-width" data-action="close-dialog">Continue shaping your kingdom ${icon('arrow-right')}</button>`;
+    dialog.setAttribute('aria-label', 'Kingdom legacy summary');
+    dialog.showModal();
+  }
+  private setBuildDock(open: boolean) {
+    if (open) this.setPanelOpen(false);
+    const tray = this.root.querySelector<HTMLElement>('.build-tray')!;
+    if (!open && tray.contains(document.activeElement))
+      tray
+        .querySelector<HTMLElement>('[data-action="toggle-build"]')!
+        .focus({ preventScroll: true });
+    tray.classList.toggle('collapsed', !open);
+    this.root.querySelector<HTMLElement>('#building-list')!.inert = !open;
+    const toggle = tray.querySelector<HTMLElement>('[data-action="toggle-build"]')!;
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.setAttribute('aria-label', open ? 'Hide building dock' : 'Show building dock');
+    this.root.querySelector('.game-shell')!.classList.toggle('dock-collapsed', !open);
+  }
   private setPanelOpen(open: boolean) {
+    if (open) this.setBuildDock(false);
     if (!open && this.root.querySelector('.inspector-shell')!.contains(document.activeElement))
       this.root
         .querySelector<HTMLElement>(`.nav-item[data-panel="${this.panel}"]`)
         ?.focus({ preventScroll: true });
     this.root.querySelector('.inspector-shell')!.classList.toggle('is-open', open);
     this.inspector.inert = !open;
+    this.root
+      .querySelector('.inspector-shell')!
+      .classList.toggle(
+        'tutorial-card',
+        this.game.state.tutorial?.status === 'active' &&
+          this.panel === 'tutorial' &&
+          !this.selected,
+      );
     this.root.querySelectorAll<HTMLElement>('.nav-item').forEach((button) => {
       button.setAttribute('aria-pressed', String(open && button.dataset.panel === this.panel));
     });
@@ -559,10 +686,6 @@ export class HUD {
     }
     if (this.demolition) this.setDemolition(false);
     if (kind) {
-      this.root.querySelector('.build-tray')!.classList.remove('collapsed');
-      const toggle = this.root.querySelector('[data-action="toggle-build"]')!;
-      toggle.setAttribute('aria-expanded', 'true');
-      toggle.setAttribute('aria-label', 'Hide building dock');
       if (this.category !== 'all' && this.category !== BUILDINGS[kind].category) {
         this.category = BUILDINGS[kind].category;
         this.renderBuildMenu();
@@ -578,7 +701,16 @@ export class HUD {
         .map(([r, n]) => `${n} ${r}`)
         .join(
           ' + ',
-        )} · ${isRouteKind(this.placement) ? 'Drag a route · Release to build · Middle-drag or arrows to pan' : 'Move over a site to preview'}</small><span class="route-total" hidden></span></span><button data-action="cancel-build" aria-label="Cancel building">${icon('x')}<kbd>Esc</kbd></button>`;
+        )} · ${isRouteKind(this.placement) ? 'Drag a route · Release to build · Middle-drag or arrows to pan' : 'Move over a site to preview'}</small><span class="route-total" hidden></span><span class="site-advice" hidden></span><span class="preview-note">Current conditions · production starts after construction and staffing</span><span class="touch-actions" hidden><button class="primary-button" data-action="confirm-touch">Confirm building</button><button class="secondary-button" data-action="clear-touch">Clear site</button></span></span><button data-action="cancel-build" aria-label="Cancel building">${icon('x')}<kbd>Esc</kbd></button>`;
+    banner.classList.remove('has-warning', 'invalid', 'route-preview');
+    if (this.placement) {
+      this.setPanelOpen(false);
+      this.setBuildDock(false);
+    }
+    const title = this.root.querySelector('.build-tray-header h2')!;
+    title.textContent = this.placement ? BUILDINGS[this.placement].name : 'Build your kingdom';
+    if (!this.placement)
+      this.root.querySelector('#map-hint')!.textContent = 'Drag to explore · Scroll to zoom';
     this.renderer.setPlacement(this.placement);
     this.root.querySelectorAll<HTMLElement>('[data-action="build"]').forEach((b) => {
       const selected = b.dataset.kind === this.placement;
@@ -594,6 +726,7 @@ export class HUD {
       this.game.state.tutorial.step === 0
     ) {
       this.game.state.tutorial.step = 1;
+      this.game.state.speed = 0;
       this.game.notify();
     }
     this.renderer.setOverlay(overlay);
@@ -619,6 +752,13 @@ export class HUD {
                 : 'Construction grid';
   }
   private renderBuildMenu() {
+    const starter = this.fullTutorialCatalog ? null : tutorialBuildings(this.game.state);
+    const tray = this.root.querySelector('.build-tray')!;
+    tray.classList.toggle('starter-tools', !!starter);
+    const catalog = this.root.querySelector<HTMLElement>('[data-action="tutorial-catalog"]')!;
+    catalog.hidden = this.game.state.tutorial?.status !== 'active';
+    catalog.textContent = this.fullTutorialCatalog ? 'Show lesson buildings' : 'Show all buildings';
+    catalog.setAttribute('aria-pressed', String(this.fullTutorialCatalog));
     this.lastUnlocks = BUILD_ORDER.map((k) => buildingUnlocked(this.game.state, k)).join(':');
     this.root.querySelectorAll<HTMLElement>('[data-action="category"]').forEach((b) => {
       const active = b.dataset.category === this.category;
@@ -626,8 +766,10 @@ export class HUD {
       b.setAttribute('aria-selected', String(active));
       b.tabIndex = active ? 0 : -1;
     });
-    this.root.querySelector('#building-list')!.innerHTML = BUILD_ORDER.filter(
-      (k) => this.category === 'all' || BUILDINGS[k].category === this.category,
+    this.root.querySelector('#building-list')!.innerHTML = BUILD_ORDER.filter((k) =>
+      starter
+        ? starter.includes(k)
+        : this.category === 'all' || BUILDINGS[k].category === this.category,
     )
       .map((kind) => {
         const def = BUILDINGS[kind];
@@ -692,12 +834,22 @@ export class HUD {
     );
     this.setPanelOpen(false);
     this.toast(
-      'The gold outline marks a suggested site. Click it on the map to start construction.',
+      'The gold outline marks a suggested site. Click to build, or tap to preview and confirm.',
     );
   }
   update() {
     const state = this.game.state;
     const t = state.tutorial;
+    const tutorialStatus = `${t?.status}:${t?.step}`;
+    if (tutorialStatus !== this.lastTutorialStatus) {
+      this.lastTutorialStatus = tutorialStatus;
+      this.renderBuildMenu();
+    }
+    const tutorialCard = t?.status === 'active' && this.panel === 'tutorial' && !this.selected;
+    this.root.querySelector('.inspector-shell')!.classList.toggle('tutorial-card', tutorialCard);
+    this.root
+      .querySelector('.game-shell')!
+      .classList.toggle('lesson-active', t?.status === 'active');
     if (t && t.step !== this.tutorialStep) {
       const previous = this.tutorialStep;
       this.tutorialStep = t.step;
@@ -706,11 +858,20 @@ export class HUD {
         this.toast(
           t.status === 'completed'
             ? 'Tutorial complete! Continue with Royal commissions.'
-            : `Tutorial lesson ${t.step + 1} ready. Open the book in Kingdom views.`,
+            : `Lesson ${t.step + 1} ready · time paused. Open the book when ready.`,
         );
+        if (t.status === 'active' && t.step !== 3) this.showPanel('tutorial');
         this.persistence.backup(state);
       }
     }
+    const alerts = kingdomAlerts(state);
+    const alertsHost = this.root.querySelector<HTMLElement>('#kingdom-alerts')!;
+    alertsHost.hidden = !alerts.length;
+    const alert = alerts[0];
+    const alertsMarkup = alert
+      ? `<button data-action="locate-issue" data-issue="${alert.id}" title="${esc(alert.remedy)}">${icon('warning')}<span>${esc(alert.title)}</span><strong>${alert.sites.length ? 'Locate' : 'Review'}</strong>${icon('arrow-right')}</button><button class="icon-button" data-action="panel" data-panel="overview" aria-label="View all kingdom issues" title="View all kingdom issues">${icon('list')}</button>`
+      : '';
+    if (alertsHost.innerHTML !== alertsMarkup) alertsHost.innerHTML = alertsMarkup;
     const season = SeasonManager.at(state.day);
     if (BUILD_ORDER.map((k) => buildingUnlocked(state, k)).join(':') !== this.lastUnlocks) {
       const menu = this.root.querySelector<HTMLElement>('#building-list')!;
@@ -805,6 +966,13 @@ export class HUD {
       this.lastMinimapTick = state.tick;
       this.lastMapRevision = mapRevision;
     }
+    if (
+      this.celebrations.pendingSummary &&
+      !this.root.querySelector<HTMLDialogElement>('dialog')!.open
+    ) {
+      this.celebrations.pendingSummary = false;
+      this.openKingdomSummary();
+    }
   }
   private updateInspector() {
     const state = this.game.state;
@@ -890,6 +1058,13 @@ export class HUD {
     }
   }
   private renderInspector(markup: string) {
+    const issue = this.activeIssue
+      ? kingdomAlerts(this.game.state).find((alert) => alert.id === this.activeIssue)
+      : null;
+    if (issue && this.selected && issue.sites.includes(this.selected) && issue.sites.length > 1)
+      markup =
+        `<button class="secondary-button full-width issue-next" data-action="locate-issue" data-issue="${issue.id}">Next affected site · ${issue.sites.length} need attention ${icon('arrow-right')}</button>` +
+        markup;
     if (this.game.state.tutorial?.status === 'active' && this.selected)
       markup =
         '<button class="secondary-button full-width" data-action="panel" data-panel="tutorial">Return to tutorial lesson</button>' +
@@ -1063,6 +1238,8 @@ export class HUD {
   }
   destroy() {
     this.abort.abort();
+    this.dockObserver.disconnect();
+    this.celebrations.destroy();
     this.unsubscribe();
     clearTimeout(this.toastTimer);
   }

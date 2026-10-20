@@ -1,3 +1,6 @@
+import { obstructsTile } from './occlusion';
+import { TouchPlacement } from '../core/touchPlacement';
+import type { SiteAdvice } from '../simulation/PlacementAdvice';
 import { scenarioFor } from '../data/scenarios';
 import { dominantFlows } from '../simulation/waterFlow';
 import { elevationRange, elevationColor, waterTileDescription } from '../simulation/WaterPlanning';
@@ -38,6 +41,7 @@ export class WorldRenderer {
   private readonly treeSprites = new Map<number, Sprite>();
   private readonly sites = new Map<string, ReturnType<typeof constructionSite>>();
   private readonly riskLabels = new Map<string, Text>();
+  private readonly touchPlacement = new TouchPlacement();
   private demolition = false;
   private readonly labels = new Container();
   private selected: string | null = null;
@@ -47,22 +51,23 @@ export class WorldRenderer {
   private routeEnd: Point | null = null;
   private overlay: Overlay = 'none';
   private resizeObserver!: ResizeObserver;
+  private readonly abort = new AbortController();
   private unsubscribe?: () => void;
   private readonly reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   onRoutePreview: (preview: RoutePreview | null) => void = () => {};
-  onPreview: (message: string, ok: boolean) => void = () => {};
+  onPreview: (message: string, ok: boolean, advice: SiteAdvice[]) => void = () => {};
   onResource: (message: string) => void = () => {};
   onSelect: (id: string | null, placed?: boolean) => void = () => {};
   onPlace: (message: string, ok: boolean) => void = () => {};
   onHover: (message: string) => void = () => {};
   onZoom: (zoom: number) => void = () => {};
+  onTouchPlan: (active: boolean) => void = () => {};
   onDemolish: (id: string) => void = () => {};
   constructor(
     private readonly game: Game,
     private readonly host: HTMLElement,
   ) {}
   async init() {
-    await this.atlas.loadIllustrations();
     await this.app.init({
       resizeTo: this.host,
       backgroundAlpha: 0,
@@ -110,7 +115,7 @@ export class WorldRenderer {
     this.camera = new Camera(
       this.world,
       this.host,
-      (x, y) => this.click(x, y),
+      (x, y, touch) => this.click(x, y, touch),
       (x, y) => this.move(x, y),
       (zoom) => this.onZoom(zoom),
       {
@@ -141,8 +146,31 @@ export class WorldRenderer {
           }
           this.drawHighlight();
         },
-        cancel: () => this.cancelRoute(),
+        cancel: () => {
+          this.cancelTouchPlacement();
+          this.cancelRoute();
+        },
       },
+    );
+    this.host.addEventListener(
+      'pointerleave',
+      () => {
+        if (!this.touchPlacement.plan && !this.routeStart) {
+          this.hover = null;
+          this.drawHighlight();
+        }
+      },
+      { signal: this.abort.signal },
+    );
+    window.addEventListener('blur', () => this.camera.cancelGesture(), {
+      signal: this.abort.signal,
+    });
+    document.addEventListener(
+      'visibilitychange',
+      () => {
+        if (document.hidden) this.camera.cancelGesture();
+      },
+      { signal: this.abort.signal },
     );
     this.camera.reset();
     this.resizeObserver = new ResizeObserver(() => {
@@ -431,14 +459,75 @@ export class WorldRenderer {
     this.drawHighlight();
   }
   setOverlay(overlay: Overlay) {
+    this.cancelTouchPlacement();
     this.overlay = overlay;
     this.sync();
+  }
+  cancelTouchPlacement() {
+    if (!this.touchPlacement.plan) return;
+    this.touchPlacement.cancel();
+    this.hover = null;
+    this.onTouchPlan(false);
+    this.drawHighlight();
+  }
+  confirmTouchPlacement() {
+    const plan = this.touchPlacement.plan;
+    if (!plan) return;
+    const result = this.touchPlacement.confirm(this.game);
+    this.onPlace(result.message, result.ok);
+    this.onTouchPlan(!!this.touchPlacement.plan);
+    if (result.ok) {
+      const b = buildingAt(this.game.state, plan.end.x, plan.end.y);
+      this.select(b?.id ?? null);
+      this.onSelect(b?.id ?? null, true);
+    }
+    this.drawHighlight();
+  }
+  focusBuilding(id: string) {
+    const b = this.game.state.buildings.find((b) => b.id === id);
+    if (!b) return;
+    const size = BUILDINGS[b.kind].size;
+    const p = toScreen(b.x + (size - 1) / 2, b.y + (size - 1) / 2);
+    this.camera.cancelGesture();
+    this.world.position.set(
+      this.host.clientWidth * (this.host.clientWidth > 900 ? 0.42 : 0.38) - p.x * this.camera.zoom,
+      this.host.clientHeight * 0.56 - p.y * this.camera.zoom,
+    );
+    this.select(id);
+  }
+  private fadeObstructions() {
+    const target = this.hover ? toScreen(this.hover.x, this.hover.y) : null;
+    for (const b of this.game.state.buildings) {
+      const sprite = this.buildingSprites.get(b.id);
+      if (!sprite) continue;
+      const base =
+        b.construction?.type === 'build'
+          ? 0.28
+          : b.construction?.type === 'upgrade'
+            ? 0.7
+            : b.enabled
+              ? 1
+              : 0.55;
+      sprite.alpha = obstructsTile(b, this.hover) ? Math.min(base, 0.25) : base;
+    }
+    for (const tree of this.treeSprites.values())
+      tree.alpha =
+        target && Math.abs(target.x - tree.x) < 30 && target.y < tree.y && target.y > tree.y - 90
+          ? 0.25
+          : 1;
   }
   private point(x: number, y: number) {
     return toGrid((x - this.world.x) / this.camera.zoom, (y - this.world.y) / this.camera.zoom);
   }
-  private click(x: number, y: number) {
+  private click(x: number, y: number, touch = false) {
     const p = this.point(x, y);
+    if (touch && this.placement && !this.demolition) {
+      this.touchPlacement.stage(this.placement, p);
+      this.hover = p;
+      this.onTouchPlan(true);
+      this.drawHighlight();
+      return;
+    }
     if (this.demolition) {
       const b = buildingAt(this.game.state, p.x, p.y);
       if (b) this.onDemolish(b.id);
@@ -489,10 +578,13 @@ export class WorldRenderer {
     }
   }
   private drawHighlight() {
+    this.fadeObstructions();
     this.highlight.clear();
     this.ghost.visible = false;
-    if (this.routeStart && this.routeEnd && isRouteKind(this.placement)) {
-      const preview = this.game.previewRoute(this.placement, this.routeStart, this.routeEnd);
+    const routeStart = this.routeStart ?? this.touchPlacement.plan?.start;
+    const routeEnd = this.routeEnd ?? this.touchPlacement.plan?.end;
+    if (routeStart && routeEnd && isRouteKind(this.placement)) {
+      const preview = this.game.previewRoute(this.placement, routeStart, routeEnd);
       for (const { point, status } of preview.cells) {
         const p = toScreen(point.x, point.y);
         const color =
@@ -532,7 +624,7 @@ export class WorldRenderer {
       }
     const cells = footprint(origin);
     if (this.placement && this.hover) {
-      const result = this.game.canPlace(this.placement, this.hover);
+      const result = this.game.previewPlacement(this.placement, this.hover);
       const size = BUILDINGS[this.placement].size;
       this.ghost.texture = this.atlas.get(
         this.placement === 'temple' ? 'temple-foundation' : this.placement,
@@ -544,7 +636,7 @@ export class WorldRenderer {
       this.ghost.alpha = 0.5;
       this.ghost.tint = result.ok ? 0xdcebc3 : 0xe6a18c;
       this.ghost.visible = true;
-      this.onPreview(result.message, result.ok);
+      this.onPreview(result.message, result.ok, result.advice);
     }
     const valid = this.demolition
       ? false
@@ -634,6 +726,7 @@ export class WorldRenderer {
     }
   }
   destroy() {
+    this.abort.abort();
     this.unsubscribe?.();
     this.resizeObserver.disconnect();
     this.camera.destroy();

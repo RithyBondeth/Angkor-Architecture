@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { Game } from '../src/core/Game';
 import { createWorld, tileAt } from '../src/core/world';
 import { completedBuilding } from '../src/core/buildingState';
-import { advanceTutorial, freshTutorial, inspectTutorialSite } from '../src/core/tutorialState';
+import {
+  advanceTutorial,
+  freshTutorial,
+  inspectTutorialSite,
+  startTutorial,
+  tutorialBuildings,
+} from '../src/core/tutorialState';
 import { readGameState, validateState } from '../src/core/Persistence';
 import { Logistics } from '../src/simulation/Logistics';
 import { tutorialPanel } from '../src/ui/TutorialUI';
@@ -14,6 +20,37 @@ function lesson() {
 }
 
 describe('interactive tutorial', () => {
+  it('starts and restarts paused and introduces the paddy with its lesson', () => {
+    const { state } = lesson();
+    state.speed = 4;
+    startTutorial(state);
+    expect(state.speed).toBe(0);
+    expect(tutorialBuildings(state)).toEqual(['canal', 'baray']);
+    state.tutorial!.step = 2;
+    expect(tutorialBuildings(state)).toContain('paddy');
+    state.tutorial!.status = 'skipped';
+    expect(tutorialBuildings(state)).toBeNull();
+    delete state.tutorial;
+    expect(tutorialBuildings(state)).toBeNull();
+  });
+
+  it('pauses at a new lesson without repeatedly interrupting the same lesson', () => {
+    const { state, t, game } = lesson();
+    t.step = 1;
+    game.place('canal', { x: 12, y: 12 });
+    const canal = state.buildings.find((b) => b.id === t.canalId)!;
+    canal.construction = null;
+    tileAt(state, 12, 12)!.water = 2;
+    state.speed = 4;
+    advanceTutorial(state);
+    expect(t.step).toBe(2);
+    expect(state.speed).toBe(0);
+    state.speed = 2;
+    advanceTutorial(state);
+    expect(state.speed).toBe(2);
+    expect(tutorialPanel({ ...state, speed: 0 })).toContain('tutorial-resume');
+  });
+
   it('starts new settlements without auto-completing from starter infrastructure', () => {
     const { state, t, game } = lesson();
     for (let i = 0; i < 25; i++) game.step();
