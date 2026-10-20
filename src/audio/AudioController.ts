@@ -114,7 +114,7 @@ export class AudioController {
     const events = game.onEvent((event) =>
       this.safe(() => {
         if (event.type === 'placement') this.engine.playPlacement(event.kind);
-        else this.engine.playDelivery(event.mode);
+        else if (event.type === 'delivery') this.engine.playDelivery(event.mode);
       }),
     );
     const world = game.subscribe(() =>

@@ -29,6 +29,7 @@ async function main() {
   const choice = await showWelcome(root, persistence, audio);
   createShell(root);
   document.title = `${persistence.activeName} | Angkor Architect`;
+  if (!choice.restored && choice.state.tutorial?.status === 'active') choice.state.speed = 0;
   const game = new Game(choice.state);
   const renderer = new WorldRenderer(game, document.querySelector<HTMLElement>('#world')!);
   await renderer.init();

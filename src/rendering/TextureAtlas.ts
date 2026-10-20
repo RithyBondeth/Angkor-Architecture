@@ -457,38 +457,6 @@ export class TextureAtlas {
     this.textures.set(key, texture);
     return texture;
   }
-  async loadIllustrations() {
-    const image = new Image();
-    image.src = '/art/temple-cartoon.png';
-    try {
-      await image.decode();
-    } catch {
-      // Procedural architecture remains available if the illustration cannot load.
-      return;
-    }
-    const scale = Math.min(304 / image.width, 264 / image.height);
-    const width = image.width * scale;
-    const height = image.height * scale;
-    for (const key of ['temple', 'temple-towers']) {
-      const frame = this.frames.get(key)!;
-      this.context.clearRect(frame.x, frame.y, frame.width, frame.height);
-      this.context.drawImage(
-        image,
-        frame.x + (frame.width - width) / 2,
-        frame.y + 54,
-        width,
-        height,
-      );
-      const thumbnail = document.createElement('canvas');
-      thumbnail.width = 192;
-      thumbnail.height = 160;
-      thumbnail
-        .getContext('2d')!
-        .drawImage(this.canvas, frame.x, frame.y, frame.width, frame.height, 0, 0, 192, 160);
-      this.thumbnails.set(key, thumbnail.toDataURL('image/png'));
-    }
-    this.texture.source.update();
-  }
   thumbnail(key: string) {
     return this.thumbnails.get(key) ?? '';
   }
@@ -741,6 +709,20 @@ export class TextureAtlas {
           const y = 23 - i * 6;
           box(c, x, y, 4, 2, 13, '#e5d7b1', '#b6a783', '#9d9475');
         }
+      if (level >= 3) {
+        // Relief bands use the same warm stone faces and upper-left light as civic buildings.
+        for (let row = 0; row < 3; row++)
+          line(
+            c,
+            [
+              [-92, -14 + row * 5],
+              [0, 32 + row * 5],
+              [92, -14 + row * 5],
+            ],
+            '#9d805945',
+            1,
+          );
+      }
       if (level >= 3)
         for (let i = 0; i < 7; i++) {
           line(

@@ -53,6 +53,7 @@ export function createWorld(seed = 802, scenario: ScenarioId = 'roluos'): GameSt
   const size = CONFIG.worldSize;
   const state: GameState = {
     version: 6,
+    milestones: [],
     scenario,
     tutorial: freshTutorial(),
     seed,

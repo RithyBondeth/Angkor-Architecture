@@ -1,3 +1,4 @@
+import type { MilestoneId } from './milestones';
 export type ScenarioId = 'roluos' | 'floodplain' | 'foothills';
 export type Resource = 'rice' | 'wood' | 'sandstone' | 'laterite' | 'merit';
 export type Resources = Record<Resource, number>;
@@ -106,6 +107,8 @@ export interface ReservoirHistory {
   samples: { tick: number; day: number; depth: number }[];
 }
 export interface GameState {
+  /** Durable celebrations; absent in older saves. */
+  milestones?: MilestoneId[];
   /** Missing in older saves means the original Roluos campaign. */
   scenario?: ScenarioId;
   /** Optional in older saves; observed readings begin when that kingdom is opened. */
