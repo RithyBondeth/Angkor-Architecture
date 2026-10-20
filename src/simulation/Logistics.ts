@@ -1,3 +1,4 @@
+import type { DeliveryArrival } from '../core/gameEvents';
 import { recordReceipt, RATE_WINDOW } from './Feedback';
 import { BUILDINGS } from '../data/buildings';
 import { CONFIG } from '../data/config';
@@ -20,7 +21,8 @@ export function deliveryRoute(state: GameState, b: Building): Point[] | null {
   return planDelivery(state, b).path;
 }
 export class Logistics {
-  step(state: GameState): void {
+  step(state: GameState): DeliveryArrival[] {
+    const arrivals: DeliveryArrival[] = [];
     state.feedback.receipts = state.feedback.receipts.filter(
       (r) => r.tick > state.tick - RATE_WINDOW,
     );
@@ -50,6 +52,15 @@ export class Logistics {
         );
         state.resources[c.resource] += received;
         recordReceipt(state, c.resource, received);
+        if (received > 0)
+          arrivals.push({ type: 'delivery', resource: c.resource, amount: received, mode: c.kind });
+        if (
+          state.tutorial?.status === 'active' &&
+          c.sourceId === state.tutorial.paddyId &&
+          c.resource === 'rice' &&
+          received > 0
+        )
+          state.tutorial.delivered = true;
         state.progression.delivered[c.resource] = Math.min(
           1e8,
           (state.progression.delivered[c.resource] ?? 0) + received,
@@ -60,7 +71,7 @@ export class Logistics {
       }
       return true;
     });
-    if (state.tick % 10 !== 0) return;
+    if (state.tick % 10 !== 0) return arrivals;
     const outputs = Logistics.outputs(state);
     for (const b of state.buildings) {
       const production = BUILDINGS[b.kind].production;
@@ -79,7 +90,7 @@ export class Logistics {
     const producers = state.buildings.filter(
       (b) => BUILDINGS[b.kind].production && b.kind !== 'temple',
     );
-    if (!producers.length) return;
+    if (!producers.length) return arrivals;
     const start = state.logistics.dispatchCursor % producers.length;
     let next = (start + 1) % producers.length;
     for (let i = 0; i < producers.length; i++) {
@@ -145,6 +156,7 @@ export class Logistics {
       next = (index + 1) % producers.length;
     }
     state.logistics.dispatchCursor = next;
+    return arrivals;
   }
   static workforce(state: GameState) {
     return workforce(state);

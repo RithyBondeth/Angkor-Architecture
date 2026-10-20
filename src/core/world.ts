@@ -1,10 +1,12 @@
+import { SCENARIOS } from '../data/scenarios';
+import { freshTutorial } from './tutorialState';
 import { CONFIG } from '../data/config';
 import { BUILDINGS } from '../data/buildings';
 import { completedBuilding, registerInfrastructure } from './buildingState';
 import { seedDeposits } from '../simulation/Deposits';
 import { freshSurvival } from './survivalState';
 import { freshProgression } from './progressionState';
-import type { Building, BuildingKind, GameState, Point, Tile } from './types';
+import type { Building, BuildingKind, GameState, Point, Tile, ScenarioId } from './types';
 
 export function tileAt(
   state: Pick<GameState, 'width' | 'height' | 'tiles'>,
@@ -45,49 +47,72 @@ export function random(seed: number): () => number {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-export function createWorld(seed = 802): GameState {
+export function createWorld(seed = 802, scenario: ScenarioId = 'roluos'): GameState {
+  const definition = SCENARIOS[scenario];
   const rand = random(seed);
   const size = CONFIG.worldSize;
   const state: GameState = {
     version: 6,
+    milestones: [],
+    scenario,
+    tutorial: freshTutorial(),
     seed,
     width: size,
     height: size,
     tiles: [],
     buildings: [],
     couriers: [],
-    resources: { rice: 680, wood: 420, sandstone: 340, laterite: 210, merit: 48 },
+    resources: { ...definition.resources },
     tick: 0,
-    day: 12,
+    day: definition.day,
     population: 84,
     happiness: 88,
     survival: freshSurvival(),
     speed: 1,
     nextId: 1,
     built: {},
-    progression: freshProgression(48),
+    progression: freshProgression(definition.resources.merit),
     logistics: { dispatchCursor: 0 },
     feedback: { sinceTick: 0, receipts: [] },
     chronicle: [
       {
         tick: 0,
         title: 'Your story begins',
-        text: 'The sovereign has entrusted you with a new settlement. Let water be its foundation.',
+        text: `${definition.name}: ${definition.description}`,
         icon: 'scroll',
       },
     ],
   };
   for (let y = 0; y < size; y++)
     for (let x = 0; x < size; x++) {
-      const river = x >= 26 + Math.sin(y * 0.31) * 1.5 || y >= 28 + Math.sin(x * 0.24);
-      const forest = !river && (x < 5 || y < 5 || (rand() < 0.18 && (x < 10 || y > 22 || x > 22)));
+      const river =
+        scenario === 'foothills'
+          ? x >= 29 || y >= 30
+          : x >= (scenario === 'floodplain' ? 25 : 26) + Math.sin(y * 0.31) * 1.5 ||
+            y >= (scenario === 'floodplain' ? 26 : 28) + Math.sin(x * 0.24);
+      const forest =
+        !river &&
+        (x < 5 ||
+          y < 5 ||
+          (rand() < (scenario === 'foothills' ? 0.35 : 0.18) && (x < 10 || y > 22 || x > 22)));
       state.tiles.push({
         x,
         y,
         terrain: river ? 'water' : forest ? 'forest' : 'grass',
-        elevation: river ? -2 : 2.6 + rand() * 0.12,
-        water: river ? 5.5 : 0,
-        fertility: 0.65 + rand() * 0.35,
+        elevation: river
+          ? -2
+          : scenario === 'floodplain' && (x < 7 || y < 6 || x > 23 || y > 24)
+            ? 2.1 + rand() * 0.25
+            : 2.6 +
+              rand() * 0.12 +
+              (scenario === 'foothills' ? Math.max(0, 9 - y) * 0.35 + Math.max(0, 9 - x) * 0.2 : 0),
+        water: river ? (scenario === 'floodplain' ? 5 : scenario === 'foothills' ? 4.6 : 5.5) : 0,
+        fertility:
+          scenario === 'floodplain'
+            ? 0.85 + rand() * 0.15
+            : scenario === 'foothills'
+              ? 0.5 + rand() * 0.3
+              : 0.65 + rand() * 0.35,
         variant: Math.floor(rand() * 5),
         timber: 0,
         mineral: null,
@@ -101,7 +126,7 @@ export function createWorld(seed = 802): GameState {
       t.terrain = kind === 'baray' ? 'reservoir' : 'grass';
       if (kind === 'baray') {
         t.elevation = -1;
-        t.water = 4.2;
+        t.water = scenario === 'foothills' ? 3.1 : 4.2;
       }
     }
   };
@@ -122,14 +147,14 @@ export function createWorld(seed = 802): GameState {
     if (t.terrain !== 'water') {
       t.terrain = 'canal';
       t.elevation = -0.8;
-      t.water = 3.5;
+      t.water = scenario === 'foothills' ? 2.7 : 3.5;
     }
   }
   for (let y = 11; y < 29; y++) {
     const t = tileAt(state, 13, y)!;
     t.terrain = 'canal';
     t.elevation = -0.8;
-    t.water = 3.5;
+    t.water = scenario === 'foothills' ? 2.7 : 3.5;
   }
   for (let y = 12; y < 27; y++) {
     const t = tileAt(state, 18, y)!;
@@ -144,4 +169,8 @@ export function createWorld(seed = 802): GameState {
   registerInfrastructure(state);
   seedDeposits(state);
   return state;
+}
+
+export function createScenario(id: ScenarioId): GameState {
+  return createWorld(SCENARIOS[id].seed, id);
 }

@@ -1,3 +1,5 @@
+import type { MilestoneId } from './milestones';
+export type ScenarioId = 'roluos' | 'floodplain' | 'foothills';
 export type Resource = 'rice' | 'wood' | 'sandstone' | 'laterite' | 'merit';
 export type Resources = Record<Resource, number>;
 export type Terrain =
@@ -20,7 +22,7 @@ export type BuildingKind =
   | 'lateritepit'
   | 'moat';
 export type Category = 'all' | 'water' | 'production' | 'civic' | 'infrastructure';
-export type Overlay = 'none' | 'water' | 'logistics' | 'resources' | 'grid';
+export type Overlay = 'none' | 'water' | 'flow' | 'elevation' | 'logistics' | 'resources' | 'grid';
 export interface Point {
   x: number;
   y: number;
@@ -92,7 +94,27 @@ export interface ChronicleEntry {
   text: string;
   icon: string;
 }
+export interface TutorialState {
+  status: 'active' | 'skipped' | 'completed';
+  step: number;
+  canalId: string | null;
+  paddyId: string | null;
+  inspected: boolean;
+  delivered: boolean;
+}
+export interface ReservoirHistory {
+  id: string;
+  samples: { tick: number; day: number; depth: number }[];
+}
 export interface GameState {
+  /** Durable celebrations; absent in older saves. */
+  milestones?: MilestoneId[];
+  /** Missing in older saves means the original Roluos campaign. */
+  scenario?: ScenarioId;
+  /** Optional in older saves; observed readings begin when that kingdom is opened. */
+  reservoirHistory?: ReservoirHistory[];
+  /** Absent in older saves; existing kingdoms opt in through the guide. */
+  tutorial?: TutorialState;
   version: 6;
   seed: number;
   width: number;

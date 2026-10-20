@@ -372,7 +372,7 @@ describe('progression saves', () => {
     const s = createWorld(),
       persistence = new Persistence();
     await persistence.save(s);
-    expect(JSON.parse([...values.values()][0]!).schema).toBe(6);
+    expect(JSON.parse(values.get('angkor-architect:slot:1:v1')!).revisions[0].schema).toBe(6);
     expect(await persistence.load()).toEqual(s);
   });
   it('rejects out-of-order or duplicate claims, unknown cargo, and invalid counters', () => {

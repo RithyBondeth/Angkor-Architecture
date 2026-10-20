@@ -747,6 +747,7 @@ summary:focus-visible {
 }
 .game-shell .toast {
   position: absolute;
+  top: auto;
   left: 50%;
   bottom: 270px;
   transform: translateX(-50%);
@@ -1255,5 +1256,621 @@ dialog > p {
   .nav-tooltip,
   .dock-toggle .ph {
     transition: none;
+  }
+}
+
+.tutorial-progress {
+  width: 100%;
+  height: 8px;
+  accent-color: var(--green);
+  margin: 12px 0;
+}
+.tutorial-status {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.game-shell .placement-banner .route-total {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 12px;
+}
+.game-shell .placement-banner.route-preview small {
+  display: block;
+}
+
+.water-planning,
+.reservoir-history {
+  margin: 16px 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.water-planning h3,
+.reservoir-history h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+.water-planning p,
+.reservoir-history p {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.water-tool-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.water-tool-buttons button {
+  padding: 8px;
+  font-size: 12px;
+}
+.water-tool-buttons button.active {
+  border-color: var(--green);
+  background: var(--active-surface);
+  color: var(--active-ink);
+}
+.reservoir-history svg {
+  display: block;
+  width: 100%;
+  color: var(--green);
+}
+.reservoir-history svg line {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.reservoir-history svg text {
+  fill: var(--muted);
+  font:
+    10px 'DM Sans',
+    sans-serif;
+}
+.reservoir-history svg polyline {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+.reservoir-history svg circle {
+  fill: currentColor;
+}
+.reservoir-history summary {
+  cursor: pointer;
+  padding: 8px 0;
+  font-size: 12px;
+}
+.reservoir-history table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.reservoir-history th,
+.reservoir-history td {
+  padding: 8px 4px;
+  text-align: right;
+  border-bottom: 1px solid var(--border);
+}
+.game-shell #overlay-label {
+  max-width: min(420px, calc(100vw - 32px));
+  white-space: normal;
+}
+.game-shell #overlay-label[data-overlay='elevation']::before {
+  content: '';
+  display: inline-block;
+  width: 48px;
+  height: 8px;
+  margin-right: 8px;
+  background: linear-gradient(to right, #2f6491, #efc571);
+}
+@media (max-width: 600px) {
+  .game-shell .map-view-buttons {
+    max-width: calc(100vw - 24px);
+    flex-wrap: wrap;
+  }
+}
+
+.game-shell .map-top-controls {
+  bottom: 272px;
+}
+.game-shell #overlay-label {
+  display: block;
+}
+.game-shell:has(#placement-banner:not([hidden])) #overlay-label {
+  display: none;
+}
+@media (max-width: 600px) {
+  .game-shell .map-top-controls {
+    bottom: 256px;
+  }
+}
+
+/* Compact map furniture keeps the build site visible at laptop sizes. */
+.game-shell .build-tray {
+  padding: 8px;
+  bottom: 72px;
+}
+.game-shell .build-tray-header {
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.game-shell .building-list {
+  grid-auto-columns: 160px;
+}
+.game-shell .building-card {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  align-content: center;
+  min-height: 64px;
+  padding: 8px;
+  text-align: left;
+}
+.game-shell .building-art {
+  grid-row: 1 / 3;
+  height: 44px;
+}
+.game-shell .building-art img {
+  width: 56px;
+  height: 56px;
+  margin-top: -4px;
+}
+.game-shell .building-art kbd {
+  right: 0;
+  top: 0;
+}
+.game-shell .building-card > strong {
+  white-space: normal;
+  font-size: 12px;
+  line-height: 1.25;
+}
+.game-shell .building-cost {
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.game-shell .build-tray.collapsed .build-tabs,
+.game-shell .build-tray.starter-tools .build-tabs,
+.game-shell .build-tray.collapsed .tutorial-catalog {
+  display: none;
+}
+.game-shell .tutorial-catalog {
+  margin: 0 0 8px;
+  padding: 4px 8px;
+  min-height: 32px;
+  font-size: 12px;
+  color: var(--green);
+}
+.game-shell .dock-toggle {
+  width: 36px;
+  height: 36px;
+}
+.game-shell .map-top-controls {
+  bottom: 224px;
+}
+.game-shell.dock-collapsed .map-top-controls {
+  bottom: 136px;
+}
+.game-shell .minimap-card {
+  bottom: 72px;
+  width: 144px;
+  padding: 8px;
+}
+.game-shell .minimap-card canvas {
+  height: 88px;
+}
+.game-shell .inspector-shell {
+  max-height: calc(100% - 304px);
+}
+.game-shell.dock-collapsed .inspector-shell {
+  max-height: calc(100% - 208px);
+}
+.game-shell .inspector-shell.tutorial-card {
+  width: 280px;
+  max-height: min(380px, calc(100% - 208px));
+}
+.game-shell .tutorial-card .inspector-frame-heading {
+  padding: 4px 8px 4px 12px;
+}
+.game-shell .tutorial-card .inspector {
+  padding: 12px;
+}
+.game-shell .tutorial-card h2 {
+  font-size: 22px;
+  margin: 6px 0 8px;
+}
+.game-shell .tutorial-card .building-description {
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 8px 0;
+}
+.game-shell .tutorial-card .tutorial-progress {
+  height: 4px;
+  margin: 4px 0;
+}
+.game-shell .tutorial-card .primary-button,
+.game-shell .tutorial-card .secondary-button {
+  min-height: 36px;
+  padding: 8px;
+  font-size: 12px;
+}
+.tutorial-time {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 4px;
+  font-size: 12px;
+}
+.tutorial-time strong {
+  display: flex;
+  gap: 6px;
+  color: var(--green);
+}
+.tutorial-time > span,
+.tutorial-time-running {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.game-shell .placement-banner {
+  top: 112px;
+  left: auto;
+  right: 24px;
+  transform: none;
+  width: 360px;
+  min-width: 0;
+  max-width: calc(100% - 112px);
+  padding: 12px;
+  align-items: flex-start;
+}
+.game-shell .placement-banner > span {
+  min-width: 0;
+}
+.game-shell .placement-banner button {
+  min-width: 32px;
+  min-height: 32px;
+  margin-left: 0;
+}
+.game-shell .placement-banner.has-warning {
+  border-color: var(--warning-border);
+}
+.site-advice {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+.site-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--green);
+}
+.site-check .ph {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.site-check.warning {
+  color: var(--gold);
+}
+.preview-note {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+.route-preview .preview-note {
+  display: none;
+}
+.game-shell .toast {
+  bottom: 232px;
+}
+.game-shell.dock-collapsed .toast {
+  bottom: 144px;
+}
+@media (max-width: 900px) {
+  .game-shell .build-tray {
+    right: 12px;
+  }
+}
+@media (max-width: 600px) {
+  .game-shell .build-tray {
+    bottom: 64px;
+  }
+  .game-shell .build-tray-header {
+    gap: 4px;
+  }
+  .game-shell .build-tray-header h2 {
+    font-size: 14px;
+    min-height: 32px;
+    align-items: center;
+  }
+  .game-shell .dock-toggle {
+    top: 0;
+  }
+  .game-shell .building-list {
+    grid-auto-columns: 160px;
+  }
+  .game-shell .map-top-controls {
+    bottom: 252px;
+  }
+  .game-shell.dock-collapsed .map-top-controls {
+    bottom: 128px;
+  }
+  .game-shell .inspector-shell.tutorial-card {
+    top: 96px;
+    left: 12px;
+    right: 62px;
+    width: auto;
+    max-height: min(380px, calc(100% - 240px));
+  }
+  .game-shell .inspector-shell,
+  .game-shell.dock-collapsed .inspector-shell {
+    max-height: calc(100% - 280px);
+  }
+  .game-shell .placement-banner {
+    top: auto;
+    bottom: 176px;
+    left: 12px;
+    right: 62px;
+    width: auto;
+    max-width: none;
+    max-height: calc(100% - 280px);
+    overflow-y: auto;
+  }
+  .game-shell .placement-banner > .ph {
+    display: none;
+  }
+  .game-shell .placement-banner small {
+    display: block;
+    font-size: 11px;
+  }
+  .game-shell .toast,
+  .game-shell.dock-collapsed .toast {
+    bottom: 176px;
+  }
+}
+
+.game-shell .placement-banner > span {
+  font-size: 13px;
+}
+.game-shell .placement-banner small {
+  font-size: 11px;
+}
+.game-shell .tutorial-card .tutorial-time {
+  margin-top: 8px;
+}
+
+/* Follow the actual dock height, including wrapped tabs and lesson catalog links. */
+.game-shell .map-top-controls,
+.game-shell.dock-collapsed .map-top-controls {
+  bottom: calc(72px + var(--dock-height, 124px) + 12px);
+}
+.game-shell .toast,
+.game-shell.dock-collapsed .toast {
+  bottom: calc(72px + var(--dock-height, 124px) + 20px);
+}
+@media (max-width: 600px) {
+  .game-shell .map-top-controls,
+  .game-shell.dock-collapsed .map-top-controls {
+    bottom: calc(64px + var(--dock-height, 52px) + 12px);
+  }
+  .game-shell .toast,
+  .game-shell.dock-collapsed .toast {
+    bottom: calc(64px + var(--dock-height, 52px) + 20px);
+  }
+  .game-shell .inspector-shell.tutorial-card {
+    max-height: min(380px, calc(100% - 240px));
+  }
+}
+
+/* Actionable issues stay compact and yield to active map tools and information panels. */
+.kingdom-alerts {
+  position: absolute;
+  top: 208px;
+  left: 96px;
+  width: min(344px, calc(100% - 136px));
+  display: flex;
+  align-items: center;
+  background: var(--paper);
+  border: 1px solid var(--warning-border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  z-index: 4;
+}
+.kingdom-alerts > button:first-child {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: 8px;
+  padding: 8px;
+  min-height: 44px;
+  text-align: left;
+  color: var(--ink);
+  font-size: 12px;
+}
+.kingdom-alerts strong {
+  margin-left: auto;
+  color: var(--gold);
+  font-size: 11px;
+}
+.kingdom-alerts .icon-button {
+  width: 40px;
+  height: 44px;
+}
+.game-shell:has(.inspector-shell.is-open) .kingdom-alerts,
+.game-shell:has(#placement-banner:not([hidden])) .kingdom-alerts {
+  display: none;
+}
+.player-feedback .survival-summary b {
+  display: block;
+  margin-top: 8px;
+  color: var(--green);
+  font-size: 12px;
+}
+.outlook-card {
+  margin: 16px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+}
+.outlook-card h3 {
+  margin: 0 0 8px;
+  font:
+    500 16px 'Fredoka',
+    sans-serif;
+}
+.outlook-card > strong {
+  display: block;
+  color: var(--green);
+  font-size: 14px;
+}
+.outlook-card p,
+.outlook-card small,
+.outlook-note {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.outlook-card p {
+  margin: 8px 0;
+}
+.game-shell .touch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.game-shell .touch-actions button {
+  margin: 0;
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.game-shell .touch-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.celebration {
+  position: absolute;
+  left: 50%;
+  top: 112px;
+  transform: translateX(-50%);
+  width: min(460px, calc(100% - 32px));
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  background: var(--paper);
+  border: 2px solid var(--gold);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  z-index: 8;
+  animation: milestone-arrive 220ms ease-out;
+}
+.milestone-emblem {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--gold);
+  border-radius: 50%;
+  background: var(--warning-surface);
+  color: var(--gold);
+  font-size: 28px;
+}
+.celebration h2 {
+  font:
+    500 22px/1.2 'Fredoka',
+    sans-serif;
+  color: var(--ink);
+  margin: 8px 0;
+}
+.celebration p {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 0;
+}
+.celebration .icon-button {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  margin-left: auto;
+}
+.legacy-summary > p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.legacy-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 20px 0;
+}
+.legacy-stats > div {
+  padding: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.legacy-stats dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+.legacy-stats dd {
+  margin: 8px 0 0;
+  font:
+    500 26px 'Fredoka',
+    sans-serif;
+  color: var(--green);
+}
+@keyframes milestone-arrive {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+@media (max-width: 600px) {
+  .kingdom-alerts {
+    top: 248px;
+    left: 12px;
+    width: calc(100% - 74px);
+  }
+  .kingdom-alerts > button:first-child {
+    flex-wrap: wrap;
+  }
+  .celebration {
+    top: 88px;
+    padding: 12px;
+    gap: 8px;
+  }
+  .milestone-emblem {
+    width: 36px;
+    height: 36px;
+    font-size: 22px;
+  }
+  .celebration h2 {
+    font-size: 18px;
+  }
+  .legacy-stats {
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .celebration {
+    animation: none;
   }
 }

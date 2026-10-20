@@ -1,3 +1,16 @@
+import { kingdomAlerts } from '../simulation/KingdomAlerts';
+import { kingdomSummary } from './LegacyUI';
+import { Celebrations } from './Celebrations';
+import { offlineSettings } from '../pwa/OfflineApp';
+import { kingdomNameInput } from './SaveSlotsUI';
+import type { AudioController } from '../audio/AudioController';
+import { scenarioFor } from '../data/scenarios';
+import { scenarioPicker, selectedScenario, updateScenarioDetails } from './ScenarioSelection';
+import { waterPlanningTools, reservoirHistoryChart, reservoirList } from './WaterPlanningUI';
+import { isRouteKind } from '../core/buildRoute';
+import { startTutorial, tutorialBuildings, inspectTutorialSite } from '../core/tutorialState';
+import { tutorialPanel } from './TutorialUI';
+import { neighbors } from '../core/world';
 import { BUILDINGS, BUILD_ORDER, RESOURCE_INFO } from '../data/buildings';
 import { templeDetails, reliefDialog } from './TempleUI';
 import { playerFeedback, waterWarnings } from './FeedbackUI';
@@ -15,7 +28,14 @@ import { toScreen } from '../rendering/isometric';
 import type { Game } from '../core/Game';
 import type { Persistence } from '../core/Persistence';
 import type { WorldRenderer } from '../rendering/WorldRenderer';
-import type { BuildingKind, Category, GameState, Overlay, Resource } from '../core/types';
+import type {
+  BuildingKind,
+  Category,
+  GameState,
+  Overlay,
+  Resource,
+  ScenarioId,
+} from '../core/types';
 import { escapeHtml as esc, icon } from './icons';
 import { constructionDetails, constructionPanel, removalDialog } from './ConstructionUI';
 import {
@@ -38,6 +58,7 @@ import {
 
 const fmt = (n: number) => Math.floor(n).toLocaleString('en-US');
 type Panel =
+  | 'tutorial'
   | 'overview'
   | 'water'
   | 'workforce'
@@ -54,12 +75,19 @@ export class HUD {
   private selected: string | null = null;
   private overlay: Overlay = 'none';
   private toastTimer = 0;
+  private tutorialStep = -1;
+  private fullTutorialCatalog = false;
+  private lastTutorialStatus = '';
   private lastSpeed: 1 | 2 | 4 = 1;
   private readonly abort = new AbortController();
   private readonly root: HTMLElement;
   private readonly inspector: HTMLElement;
   private readonly minimap: HTMLCanvasElement;
   private unsubscribe: () => void;
+  private readonly celebrations: Celebrations;
+  private readonly issueCursors = new Map<string, number>();
+  private activeIssue: string | null = null;
+  private readonly dockObserver: ResizeObserver;
   private lastMinimapTick = -1;
   private inspectorMarkup = '';
   private inspectorViewKey = '';
@@ -71,35 +99,105 @@ export class HUD {
     private readonly game: Game,
     private readonly renderer: WorldRenderer,
     private readonly persistence: Persistence,
-    private readonly reset: () => Promise<void>,
+    private readonly reset: (scenario: ScenarioId) => Promise<void>,
+    private readonly audio: AudioController,
   ) {
     this.root = document.querySelector('#app')!;
     if (game.state.speed > 0) this.lastSpeed = game.state.speed as 1 | 2 | 4;
     this.inspector = this.root.querySelector('#inspector')!;
     this.minimap = this.root.querySelector('#minimap')!;
+    this.celebrations = new Celebrations(this.root.querySelector('#celebration')!, game);
+    const tray = this.root.querySelector<HTMLElement>('.build-tray')!;
+    this.dockObserver = new ResizeObserver(() => {
+      this.root
+        .querySelector<HTMLElement>('.game-shell')!
+        .style.setProperty('--dock-height', `${tray.offsetHeight}px`);
+    });
+    this.dockObserver.observe(tray);
+    if (game.state.tutorial?.status === 'active') this.panel = 'tutorial';
     this.renderBuildMenu();
     this.bindEvents();
     this.unsubscribe = game.subscribe(() => this.update());
-    renderer.onSelect = (id) => {
+    renderer.onSelect = (id, placed) => {
+      this.activeIssue = null;
       this.selected = id;
-      this.setPanelOpen(!!id);
-      this.updateInspector();
+      if (!placed) inspectTutorialSite(this.game.state, id);
+      if (placed && this.game.state.tutorial?.status === 'active') {
+        this.chooseBuilding(null);
+        this.showPanel('tutorial');
+      } else {
+        this.setPanelOpen(!!id && !placed);
+        this.updateInspector();
+      }
+      this.update();
     };
     renderer.onPlace = (message, ok) => {
       this.toast(message, !ok);
       this.update();
     };
     renderer.onResource = (message) => this.toast(message);
-    renderer.onPreview = (message, ok) => {
+    renderer.onRoutePreview = (preview) => {
+      const banner = this.root.querySelector<HTMLElement>('#placement-banner')!;
+      banner.classList.toggle('route-preview', !!preview);
+      if (preview) banner.classList.remove('has-warning');
+      banner.classList.toggle('invalid', !!preview && !preview.ok);
+      const confirm = banner.querySelector<HTMLButtonElement>('[data-action="confirm-touch"]');
+      if (confirm && preview) confirm.disabled = !preview.ok;
+      const advice = banner.querySelector<HTMLElement>('.site-advice');
+      if (advice) advice.hidden = !!preview;
+      const total = banner.querySelector<HTMLElement>('.route-total');
+      if (total) {
+        total.hidden = !preview;
+        total.textContent = preview
+          ? `${preview.cells.length} ${preview.cells.length === 1 ? 'tile' : 'tiles'} · Total: ${
+              Object.entries(preview.cost)
+                .map(([r, n]) => `${n} ${r}`)
+                .join(' + ') || '0 materials'
+            }`
+          : '';
+      }
+      const status = banner.querySelector('small');
+      if (status && preview)
+        status.textContent = `${preview.newTiles} new · ${preview.existingTiles} existing · ${preview.message}`;
+    };
+    renderer.onPreview = (message, ok, advice) => {
       const banner = this.root.querySelector<HTMLElement>('#placement-banner')!;
       banner.classList.toggle('invalid', !ok);
+      const confirm = banner.querySelector<HTMLButtonElement>('[data-action="confirm-touch"]');
+      if (confirm) confirm.disabled = !ok;
+      banner.classList.toggle('has-warning', ok && advice.some((item) => item.warning));
+      const notes = banner.querySelector<HTMLElement>('.site-advice');
+      if (notes) {
+        const markup = advice
+          .map(
+            (item) =>
+              `<span class="site-check ${item.warning ? 'warning' : ''}">${icon(item.warning ? 'warning' : 'check-circle')}${esc(item.message)}</span>`,
+          )
+          .join('');
+        if (notes.innerHTML !== markup) notes.innerHTML = markup;
+        notes.hidden = !advice.length;
+      }
       const status = banner.querySelector('small');
+      const touchControls = banner.querySelector<HTMLElement>('.touch-actions');
+      if (touchControls && !touchControls.hidden)
+        message = message.replace('Click to start', 'Confirm to start');
       if (status && this.placement)
         status.textContent = `${BUILDINGS[this.placement].size} × ${BUILDINGS[this.placement].size} · ${Object.entries(
           BUILDINGS[this.placement].cost,
         )
           .map(([r, n]) => `${n} ${r}`)
           .join(' + ')} · ${message}`;
+    };
+    renderer.onTouchPlan = (active) => {
+      const controls = this.root.querySelector<HTMLElement>('.touch-actions');
+      if (controls) controls.hidden = !active;
+      const note = this.root.querySelector<HTMLElement>('.preview-note');
+      if (note)
+        note.textContent = active
+          ? isRouteKind(this.placement)
+            ? 'Tap another tile to extend this route. Confirm to build; drag to pan.'
+            : 'Tap another site to compare. Confirm to build; drag to pan.'
+          : 'Tap a site to preview; drag to explore; pinch to zoom.';
     };
     renderer.onHover = (message) => {
       this.root.querySelector('#map-hint')!.textContent = message;
@@ -110,17 +208,68 @@ export class HUD {
     this.root.querySelector('#zoom-value')!.textContent =
       `${Math.round(renderer.camera.zoom * 100)}%`;
     renderer.onDemolish = (id) => this.openRemoval(id, false);
+    this.setBuildDock(false);
     this.update();
-    if (matchMedia('(max-width: 600px)').matches) this.setPanelOpen(false);
+    if (game.state.tutorial?.status === 'active') {
+      this.showPanel('tutorial');
+      this.setBuildDock(false);
+    }
+    if (matchMedia('(max-width: 600px)').matches && game.state.tutorial?.status !== 'active')
+      this.setPanelOpen(false);
   }
   private bindEvents() {
     const options = { signal: this.abort.signal };
+    this.root.addEventListener(
+      'change',
+      (event) => {
+        if ((event.target as HTMLInputElement).name === 'scenario')
+          updateScenarioDetails(this.root);
+      },
+      options,
+    );
     this.root.addEventListener(
       'click',
       (e) => {
         const button = (e.target as Element).closest<HTMLElement>('[data-action]');
         if (!button) return;
         const action = button.dataset.action;
+        if (action === 'confirm-touch') this.renderer.confirmTouchPlacement();
+        if (action === 'clear-touch') this.renderer.cancelTouchPlacement();
+        if (action === 'milestone-dismiss') this.celebrations.dismiss();
+        if (action === 'kingdom-summary') this.openKingdomSummary();
+        if (action === 'locate-issue') this.locateIssue(button.dataset.issue!);
+        if (action === 'tutorial-start') {
+          this.chooseBuilding(null);
+          startTutorial(this.game.state);
+          this.fullTutorialCatalog = false;
+          this.renderBuildMenu();
+          this.dialogResumeSpeed = null;
+          this.root.querySelector<HTMLDialogElement>('dialog')!.close();
+          this.showPanel('tutorial');
+          this.setBuildDock(false);
+          this.game.notify();
+          this.persistence.backup(this.game.state);
+        }
+        if (action === 'tutorial-skip') {
+          if (this.game.state.tutorial) this.game.state.tutorial.status = 'skipped';
+          this.renderer.guideSite(null);
+          this.showPanel('overview');
+          this.game.notify();
+          this.persistence.backup(this.game.state);
+        }
+        if (action === 'tutorial-retry' && this.game.state.tutorial) {
+          this.game.state.tutorial.canalId = null;
+          this.game.notify();
+        }
+        if (action === 'tutorial-help') this.helpTutorial();
+        if (action === 'tutorial-resume') this.game.setSpeed(1);
+        if (action === 'tutorial-catalog') {
+          this.fullTutorialCatalog = !this.fullTutorialCatalog;
+          this.category = 'all';
+          this.chooseBuilding(null);
+          this.renderBuildMenu();
+          this.setBuildDock(true);
+        }
         if (action === 'excavate-moat') {
           const result = this.game.excavateMoat(button.dataset.id!);
           this.toast(result.message, !result.ok);
@@ -170,7 +319,7 @@ export class HUD {
               : this.game.demolish(id);
           this.root.querySelector<HTMLDialogElement>('dialog')!.close();
           this.selected = this.game.state.buildings.some((b) => b.id === id) ? id : null;
-          this.renderer.select(this.selected);
+          this.renderer.focusBuilding(this.selected!);
           this.setPanelOpen(true);
           this.updateInspector();
           this.toast(r.message, !r.ok);
@@ -180,16 +329,29 @@ export class HUD {
           this.category = button.dataset.category as Category;
           this.renderBuildMenu();
         }
+        if (action === 'rename-kingdom') {
+          const input = this.root.querySelector<HTMLInputElement>('#kingdom-name-input')!;
+          if (input.reportValidity()) {
+            button.setAttribute('disabled', '');
+            void this.persistence
+              .rename(input.value)
+              .then(() => {
+                document.title = `${this.persistence.activeName} | Angkor Architect`;
+                this.toast('Kingdom renamed.');
+              })
+              .catch((error) =>
+                this.toast(
+                  error instanceof Error ? error.message : 'Could not rename kingdom.',
+                  true,
+                ),
+              )
+              .finally(() => button.removeAttribute('disabled'));
+          }
+        }
         if (action === 'return-menu') void this.returnToMenu(button);
         if (action === 'toggle-build') {
-          const tray = this.root.querySelector<HTMLElement>('.build-tray')!;
-          const collapsed = tray.classList.toggle('collapsed');
-          button.setAttribute('aria-expanded', String(!collapsed));
-          button.setAttribute(
-            'aria-label',
-            collapsed ? 'Show building dock' : 'Hide building dock',
-          );
-          if (collapsed) this.chooseBuilding(null);
+          const open = this.root.querySelector('.build-tray')!.classList.contains('collapsed');
+          this.setBuildDock(open);
         }
         if (action === 'panel') this.showPanel(button.dataset.panel as Panel);
         if (action === 'cancel-build') this.chooseBuilding(null);
@@ -230,7 +392,8 @@ export class HUD {
         }
         if (action === 'select-building') {
           this.selected = button.dataset.id!;
-          this.renderer.select(this.selected);
+          inspectTutorialSite(this.game.state, this.selected);
+          this.renderer.focusBuilding(this.selected!);
           this.setPanelOpen(true);
           this.updateInspector();
         }
@@ -256,12 +419,15 @@ export class HUD {
           setTimeout(() => URL.revokeObjectURL(url), 1000);
         }
         if (action === 'import') this.root.querySelector<HTMLInputElement>('#import-file')!.click();
-        if (action === 'reset')
-          this.root.querySelector<HTMLElement>('#reset-confirm')!.hidden = false;
-        if (action === 'cancel-reset')
-          this.root.querySelector<HTMLElement>('#reset-confirm')!.hidden = true;
-        if (action === 'confirm-reset')
-          void this.reset().catch(() => this.toast('The new settlement could not be saved.', true));
+        if (action === 'reset') this.openScenarioPicker();
+        if (action === 'confirm-scenario') {
+          const dialog = this.root.querySelector<HTMLDialogElement>('dialog')!;
+          button.setAttribute('disabled', '');
+          void this.reset(selectedScenario(dialog)).catch(() => {
+            button.removeAttribute('disabled');
+            this.toast('The new settlement could not be saved.', true);
+          });
+        }
       },
       options,
     );
@@ -309,6 +475,8 @@ export class HUD {
           e.preventDefault();
           this.game.setSpeed(this.game.state.speed === 0 ? this.lastSpeed : 0);
         }
+        if (e.key === 'f') this.setOverlay(this.overlay === 'flow' ? 'none' : 'flow');
+        if (e.key === 'e') this.setOverlay(this.overlay === 'elevation' ? 'none' : 'elevation');
         if (e.key === 'w') this.setOverlay(this.overlay === 'water' ? 'none' : 'water');
         if (e.key === 'l') this.setOverlay(this.overlay === 'logistics' ? 'none' : 'logistics');
         if (e.key === 'r') this.setOverlay(this.overlay === 'resources' ? 'none' : 'resources');
@@ -366,6 +534,7 @@ export class HUD {
           this.dialogResumeSpeed = null;
           this.game.setSpeed(speed);
         }
+        if (this.celebrations.pendingSummary) this.update();
       },
       { signal: this.abort.signal },
     );
@@ -386,6 +555,7 @@ export class HUD {
     );
   }
   private openRemoval(id: string, cancelOnly: boolean) {
+    this.renderer.camera.cancelGesture();
     const b = this.game.state.buildings.find((b) => b.id === id);
     if (!b) return;
     const dialog = this.root.querySelector<HTMLDialogElement>('dialog')!;
@@ -395,13 +565,67 @@ export class HUD {
     dialog.setAttribute('aria-label', 'Review demolition and material refund');
     dialog.showModal();
   }
+  private locateIssue(id: string) {
+    const alert = kingdomAlerts(this.game.state).find((item) => item.id === id);
+    if (!alert) {
+      this.toast('This issue has been resolved.');
+      return;
+    }
+    this.chooseBuilding(null);
+    this.showPanel(alert.panel);
+    this.activeIssue = alert.id;
+    if (alert.sites.length) {
+      const index = (this.issueCursors.get(id) ?? 0) % alert.sites.length;
+      this.issueCursors.set(id, index + 1);
+      this.selected = alert.sites[index]!;
+      this.renderer.focusBuilding(this.selected);
+      this.updateInspector();
+      this.toast(`Site ${index + 1} of ${alert.sites.length} · ${alert.remedy}`);
+    }
+  }
+  private openKingdomSummary() {
+    const dialog = this.root.querySelector<HTMLDialogElement>('dialog')!;
+    if (dialog.open) {
+      this.celebrations.pendingSummary = true;
+      return;
+    }
+    this.renderer.camera.cancelGesture();
+    this.dialogResumeSpeed = this.game.state.speed;
+    this.game.setSpeed(0);
+    dialog.innerHTML = `<button class="dialog-close icon-button" data-action="close-dialog" aria-label="Close kingdom summary">${icon('x')}</button>${kingdomSummary(this.game.state)}<button class="primary-button full-width" data-action="close-dialog">Continue shaping your kingdom ${icon('arrow-right')}</button>`;
+    dialog.setAttribute('aria-label', 'Kingdom legacy summary');
+    dialog.showModal();
+  }
+  private setBuildDock(open: boolean) {
+    if (open) this.setPanelOpen(false);
+    const tray = this.root.querySelector<HTMLElement>('.build-tray')!;
+    if (!open && tray.contains(document.activeElement))
+      tray
+        .querySelector<HTMLElement>('[data-action="toggle-build"]')!
+        .focus({ preventScroll: true });
+    tray.classList.toggle('collapsed', !open);
+    this.root.querySelector<HTMLElement>('#building-list')!.inert = !open;
+    const toggle = tray.querySelector<HTMLElement>('[data-action="toggle-build"]')!;
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.setAttribute('aria-label', open ? 'Hide building dock' : 'Show building dock');
+    this.root.querySelector('.game-shell')!.classList.toggle('dock-collapsed', !open);
+  }
   private setPanelOpen(open: boolean) {
+    if (open) this.setBuildDock(false);
     if (!open && this.root.querySelector('.inspector-shell')!.contains(document.activeElement))
       this.root
         .querySelector<HTMLElement>(`.nav-item[data-panel="${this.panel}"]`)
         ?.focus({ preventScroll: true });
     this.root.querySelector('.inspector-shell')!.classList.toggle('is-open', open);
     this.inspector.inert = !open;
+    this.root
+      .querySelector('.inspector-shell')!
+      .classList.toggle(
+        'tutorial-card',
+        this.game.state.tutorial?.status === 'active' &&
+          this.panel === 'tutorial' &&
+          !this.selected,
+      );
     this.root.querySelectorAll<HTMLElement>('.nav-item').forEach((button) => {
       button.setAttribute('aria-pressed', String(open && button.dataset.panel === this.panel));
     });
@@ -462,10 +686,6 @@ export class HUD {
     }
     if (this.demolition) this.setDemolition(false);
     if (kind) {
-      this.root.querySelector('.build-tray')!.classList.remove('collapsed');
-      const toggle = this.root.querySelector('[data-action="toggle-build"]')!;
-      toggle.setAttribute('aria-expanded', 'true');
-      toggle.setAttribute('aria-label', 'Hide building dock');
       if (this.category !== 'all' && this.category !== BUILDINGS[kind].category) {
         this.category = BUILDINGS[kind].category;
         this.renderBuildMenu();
@@ -481,7 +701,16 @@ export class HUD {
         .map(([r, n]) => `${n} ${r}`)
         .join(
           ' + ',
-        )} · Move over a site to preview</small></span><button data-action="cancel-build" aria-label="Cancel building">${icon('x')}<kbd>Esc</kbd></button>`;
+        )} · ${isRouteKind(this.placement) ? 'Drag a route · Release to build · Middle-drag or arrows to pan' : 'Move over a site to preview'}</small><span class="route-total" hidden></span><span class="site-advice" hidden></span><span class="preview-note">Current conditions · production starts after construction and staffing</span><span class="touch-actions" hidden><button class="primary-button" data-action="confirm-touch">Confirm building</button><button class="secondary-button" data-action="clear-touch">Clear site</button></span></span><button data-action="cancel-build" aria-label="Cancel building">${icon('x')}<kbd>Esc</kbd></button>`;
+    banner.classList.remove('has-warning', 'invalid', 'route-preview');
+    if (this.placement) {
+      this.setPanelOpen(false);
+      this.setBuildDock(false);
+    }
+    const title = this.root.querySelector('.build-tray-header h2')!;
+    title.textContent = this.placement ? BUILDINGS[this.placement].name : 'Build your kingdom';
+    if (!this.placement)
+      this.root.querySelector('#map-hint')!.textContent = 'Drag to explore · Scroll to zoom';
     this.renderer.setPlacement(this.placement);
     this.root.querySelectorAll<HTMLElement>('[data-action="build"]').forEach((b) => {
       const selected = b.dataset.kind === this.placement;
@@ -491,6 +720,15 @@ export class HUD {
   }
   private setOverlay(overlay: Overlay) {
     this.overlay = overlay;
+    if (
+      overlay === 'water' &&
+      this.game.state.tutorial?.status === 'active' &&
+      this.game.state.tutorial.step === 0
+    ) {
+      this.game.state.tutorial.step = 1;
+      this.game.state.speed = 0;
+      this.game.notify();
+    }
     this.renderer.setOverlay(overlay);
     this.root.querySelectorAll<HTMLElement>('[data-action="overlay"]').forEach((b) => {
       const selected = b.dataset.overlay === overlay;
@@ -499,16 +737,28 @@ export class HUD {
     });
     const label = this.root.querySelector<HTMLElement>('#overlay-label')!;
     label.hidden = overlay === 'none';
+    label.dataset.overlay = overlay;
     label.textContent =
-      overlay === 'water'
-        ? 'Water depth overlay'
-        : overlay === 'logistics'
-          ? 'Active delivery routes'
-          : overlay === 'resources'
-            ? 'Gold sandstone · clay laterite · green timber'
-            : 'Construction grid';
+      overlay === 'flow'
+        ? 'Strongest outflow next tick · thicker = more water'
+        : overlay === 'elevation'
+          ? 'Ground elevation · blue low → gold high · tap for readings'
+          : overlay === 'water'
+            ? 'Water depth overlay'
+            : overlay === 'logistics'
+              ? 'Active delivery routes'
+              : overlay === 'resources'
+                ? 'Gold sandstone · clay laterite · green timber'
+                : 'Construction grid';
   }
   private renderBuildMenu() {
+    const starter = this.fullTutorialCatalog ? null : tutorialBuildings(this.game.state);
+    const tray = this.root.querySelector('.build-tray')!;
+    tray.classList.toggle('starter-tools', !!starter);
+    const catalog = this.root.querySelector<HTMLElement>('[data-action="tutorial-catalog"]')!;
+    catalog.hidden = this.game.state.tutorial?.status !== 'active';
+    catalog.textContent = this.fullTutorialCatalog ? 'Show lesson buildings' : 'Show all buildings';
+    catalog.setAttribute('aria-pressed', String(this.fullTutorialCatalog));
     this.lastUnlocks = BUILD_ORDER.map((k) => buildingUnlocked(this.game.state, k)).join(':');
     this.root.querySelectorAll<HTMLElement>('[data-action="category"]').forEach((b) => {
       const active = b.dataset.category === this.category;
@@ -516,8 +766,10 @@ export class HUD {
       b.setAttribute('aria-selected', String(active));
       b.tabIndex = active ? 0 : -1;
     });
-    this.root.querySelector('#building-list')!.innerHTML = BUILD_ORDER.filter(
-      (k) => this.category === 'all' || BUILDINGS[k].category === this.category,
+    this.root.querySelector('#building-list')!.innerHTML = BUILD_ORDER.filter((k) =>
+      starter
+        ? starter.includes(k)
+        : this.category === 'all' || BUILDINGS[k].category === this.category,
     )
       .map((kind) => {
         const def = BUILDINGS[kind];
@@ -530,8 +782,96 @@ export class HUD {
       })
       .join('');
   }
+  private helpTutorial() {
+    const t = this.game.state.tutorial;
+    if (!t || t.status !== 'active') return;
+    if (t.step === 0) {
+      this.setOverlay('water');
+      return;
+    }
+    if ((t.step === 1 && t.canalId) || t.step >= 3) {
+      const id = t.step === 1 ? t.canalId : t.paddyId;
+      if (!id) return;
+      this.chooseBuilding(null);
+      this.selected = id;
+      this.renderer.select(id);
+      inspectTutorialSite(this.game.state, id);
+      this.game.notify();
+      this.setPanelOpen(true);
+      return;
+    }
+    const kind = t.step === 1 ? 'canal' : 'paddy';
+    const candidates = this.game.state.tiles.filter(
+      (tile) =>
+        this.game.canPlace(kind, tile).ok &&
+        (kind === 'canal'
+          ? neighbors(tile).some((p) => {
+              const n = tileAt(this.game.state, p.x, p.y);
+              return (
+                n && ['water', 'canal', 'reservoir', 'moat'].includes(n.terrain) && n.water >= 1.25
+              );
+            })
+          : WaterSimulation.irrigation(this.game.state, tile.x, tile.y) >= 0.5),
+    );
+    candidates.sort(
+      (a, b) => Math.abs(a.x - 14) + Math.abs(a.y - 14) - Math.abs(b.x - 14) - Math.abs(b.y - 14),
+    );
+    const site = candidates[0];
+    this.chooseBuilding(kind);
+    if (!site) {
+      this.toast(
+        'No suitable affordable site found. Check materials and clear land near a filled waterway.',
+        true,
+      );
+      return;
+    }
+    this.renderer.guideSite({ ...site, kind });
+    const point = toScreen(site.x, site.y);
+    const host = this.root.querySelector<HTMLElement>('#world')!;
+    this.renderer.world.position.set(
+      host.clientWidth * 0.42 - point.x * this.renderer.camera.zoom,
+      host.clientHeight * 0.45 - point.y * this.renderer.camera.zoom,
+    );
+    this.setPanelOpen(false);
+    this.toast(
+      'The gold outline marks a suggested site. Click to build, or tap to preview and confirm.',
+    );
+  }
   update() {
     const state = this.game.state;
+    const t = state.tutorial;
+    const tutorialStatus = `${t?.status}:${t?.step}`;
+    if (tutorialStatus !== this.lastTutorialStatus) {
+      this.lastTutorialStatus = tutorialStatus;
+      this.renderBuildMenu();
+    }
+    const tutorialCard = t?.status === 'active' && this.panel === 'tutorial' && !this.selected;
+    this.root.querySelector('.inspector-shell')!.classList.toggle('tutorial-card', tutorialCard);
+    this.root
+      .querySelector('.game-shell')!
+      .classList.toggle('lesson-active', t?.status === 'active');
+    if (t && t.step !== this.tutorialStep) {
+      const previous = this.tutorialStep;
+      this.tutorialStep = t.step;
+      this.renderer.guideSite(null);
+      if (previous >= 0 && t.status !== 'skipped') {
+        this.toast(
+          t.status === 'completed'
+            ? 'Tutorial complete! Continue with Royal commissions.'
+            : `Lesson ${t.step + 1} ready · time paused. Open the book when ready.`,
+        );
+        if (t.status === 'active' && t.step !== 3) this.showPanel('tutorial');
+        this.persistence.backup(state);
+      }
+    }
+    const alerts = kingdomAlerts(state);
+    const alertsHost = this.root.querySelector<HTMLElement>('#kingdom-alerts')!;
+    alertsHost.hidden = !alerts.length;
+    const alert = alerts[0];
+    const alertsMarkup = alert
+      ? `<button data-action="locate-issue" data-issue="${alert.id}" title="${esc(alert.remedy)}">${icon('warning')}<span>${esc(alert.title)}</span><strong>${alert.sites.length ? 'Locate' : 'Review'}</strong>${icon('arrow-right')}</button><button class="icon-button" data-action="panel" data-panel="overview" aria-label="View all kingdom issues" title="View all kingdom issues">${icon('list')}</button>`
+      : '';
+    if (alertsHost.innerHTML !== alertsMarkup) alertsHost.innerHTML = alertsMarkup;
     const season = SeasonManager.at(state.day);
     if (BUILD_ORDER.map((k) => buildingUnlocked(state, k)).join(':') !== this.lastUnlocks) {
       const menu = this.root.querySelector<HTMLElement>('#building-list')!;
@@ -577,6 +917,7 @@ export class HUD {
       state.survival.hunger > 0
         ? `${Math.round(productivity(state) * 100)}% productive`
         : `${Math.floor(state.happiness)}% content`;
+    this.root.querySelector('#region-name')!.textContent = scenarioFor(state).region;
     this.root.querySelector('#game-date')!.textContent = `${season.year} CE`;
     this.root.querySelector('#game-day')!.textContent = `Day ${state.day}`;
     this.root.querySelector('#season-name')!.textContent = season.name;
@@ -625,12 +966,23 @@ export class HUD {
       this.lastMinimapTick = state.tick;
       this.lastMapRevision = mapRevision;
     }
+    if (
+      this.celebrations.pendingSummary &&
+      !this.root.querySelector<HTMLDialogElement>('dialog')!.open
+    ) {
+      this.celebrations.pendingSummary = false;
+      this.openKingdomSummary();
+    }
   }
   private updateInspector() {
     const state = this.game.state;
     const selected = state.buildings.find((b) => b.id === this.selected);
     this.inspector.classList.toggle('has-selection', !!selected);
     this.inspector.classList.toggle('is-projects', this.panel !== 'overview');
+    if (!selected && this.panel === 'tutorial') {
+      this.renderInspector(tutorialPanel(state));
+      return;
+    }
     if (selected?.construction) {
       this.renderInspector(
         constructionDetails(selected, state, this.renderer.atlas.thumbnail(selected.kind)) +
@@ -659,7 +1011,7 @@ export class HUD {
       );
       const fill = Math.min(100, (volume / (def.size * def.size * 6)) * 100);
       this.renderInspector(
-        `<div class="panel-eyebrow">${def.category === 'water' ? 'Water management' : def.category === 'production' ? 'Production' : def.category === 'infrastructure' ? 'Paths & bridges' : 'Civic life'}<button class="icon-button" data-action="close-inspector" aria-label="Close building details">${icon('x')}</button></div><h2>${selected.kind === 'baray' ? 'Royal Baray' : def.name}</h2><p class="panel-subtitle">${def.subtitle}</p><div class="inspector-art"><img src="${this.renderer.atlas.thumbnail(selected.kind)}" alt="Isometric ${def.name.toLowerCase()}" /></div><div class="operational ${selected.enabled && selected.condition === 100 && !selected.crop?.failed ? '' : 'idle'}">${icon(selected.condition < 100 || selected.crop?.failed ? 'warning' : selected.enabled ? 'check-circle' : 'pause-circle')}${buildingStatus(selected)}</div><p class="building-description">${def.description}</p>${buildingSurvivalDetails(selected, state)}${supportDetails(selected, state)}${logisticsDetails(selected, state)}${templeDetails(selected, state)}${selected.kind === 'baray' ? `<div class="stat-heading"><span>Water stored</span><strong>${Math.round(fill)}%</strong></div><div class="water-meter"><span style="width:${fill}%"></span></div><div class="water-volume">${fmt(volume * 40)} <span>/ ${fmt(def.size * def.size * 6 * 40)} m³</span></div><div class="detail-row"><span>${icon('cloud-rain')}Current season</span><strong>${SeasonManager.at(state.day).name}</strong></div><div class="detail-row"><span>${icon('plant')}Irrigated fields</span><strong>${state.buildings.filter((b) => b.kind === 'paddy' && !b.construction && WaterSimulation.irrigation(state, b.x, b.y) > 0.2).length} fields</strong></div>` : `<div class="detail-row"><span>${icon('users')}Workers</span><strong>${def.workers}</strong></div>${def.production ? `<div class="detail-row"><span>${icon(RESOURCE_INFO[def.production.resource].icon)}Potential / cycle</span><strong>+${fmt(Logistics.outputs(state).get(selected.id) ?? 0)} ${RESOURCE_INFO[def.production.resource].name.toLowerCase()}</strong></div>` : ''}${selected.kind === 'paddy' ? `<div class="detail-row"><span>${icon('drop')}Irrigation</span><strong>${Math.round(irrigated * 100)}%</strong></div>` : ''}${selected.stock ? `<div class="detail-row"><span>Awaiting transport</span><strong>${fmt(selected.stock)}</strong></div>` : ''}`}${selected.kind === 'temple' ? `<div class="temple-stages">${['Laterite foundation', 'Sandstone towers', 'Sculpted reliefs'].map((s, i) => `<span class="${i < selected.level ? 'done' : ''}">${icon(i < selected.level ? 'check-circle' : 'circle')}${s}</span>`).join('')}</div>${templeUpgradeButton(selected, state)}` : ''}${!['baray', 'canal', 'moat', 'house', 'road', 'bridge'].includes(selected.kind) ? `<button class="secondary-button full-width" data-action="toggle-building">${icon(selected.enabled ? 'pause' : 'play')}${selected.kind === 'gate' ? (selected.enabled ? 'Close floodgate' : 'Open floodgate') : ['granary', 'workshop', 'warehouse'].includes(selected.kind) ? (selected.enabled ? 'Pause service' : 'Resume service') : selected.enabled ? 'Pause production' : 'Resume production'}</button>` : ''}<button class="remove-structure full-width" data-action="remove-structure" data-id="${selected.id}" aria-label="Remove structure">${icon('trash')}Remove structure<span>Review refund</span></button>`,
+        `<div class="panel-eyebrow">${def.category === 'water' ? 'Water management' : def.category === 'production' ? 'Production' : def.category === 'infrastructure' ? 'Paths & bridges' : 'Civic life'}<button class="icon-button" data-action="close-inspector" aria-label="Close building details">${icon('x')}</button></div><h2>${selected.kind === 'baray' ? 'Royal Baray' : def.name}</h2><p class="panel-subtitle">${def.subtitle}</p><div class="inspector-art"><img src="${this.renderer.atlas.thumbnail(selected.kind)}" alt="Isometric ${def.name.toLowerCase()}" /></div><div class="operational ${selected.enabled && selected.condition === 100 && !selected.crop?.failed ? '' : 'idle'}">${icon(selected.condition < 100 || selected.crop?.failed ? 'warning' : selected.enabled ? 'check-circle' : 'pause-circle')}${buildingStatus(selected)}</div><p class="building-description">${def.description}</p>${buildingSurvivalDetails(selected, state)}${supportDetails(selected, state)}${logisticsDetails(selected, state)}${templeDetails(selected, state)}${selected.kind === 'baray' ? `<div class="stat-heading"><span>Water stored</span><strong>${Math.round(fill)}%</strong></div><div class="water-meter"><span style="width:${fill}%"></span></div><div class="water-volume">${fmt(volume * 40)} <span>/ ${fmt(def.size * def.size * 6 * 40)} m³</span></div><div class="detail-row"><span>${icon('cloud-rain')}Current season</span><strong>${SeasonManager.at(state.day).name}</strong></div><div class="detail-row"><span>${icon('plant')}Irrigated fields</span><strong>${state.buildings.filter((b) => b.kind === 'paddy' && !b.construction && WaterSimulation.irrigation(state, b.x, b.y) > 0.2).length} fields</strong></div>${reservoirHistoryChart(state, selected)}` : `<div class="detail-row"><span>${icon('users')}Workers</span><strong>${def.workers}</strong></div>${def.production ? `<div class="detail-row"><span>${icon(RESOURCE_INFO[def.production.resource].icon)}Potential / cycle</span><strong>+${fmt(Logistics.outputs(state).get(selected.id) ?? 0)} ${RESOURCE_INFO[def.production.resource].name.toLowerCase()}</strong></div>` : ''}${selected.kind === 'paddy' ? `<div class="detail-row"><span>${icon('drop')}Irrigation</span><strong>${Math.round(irrigated * 100)}%</strong></div>` : ''}${selected.stock ? `<div class="detail-row"><span>Awaiting transport</span><strong>${fmt(selected.stock)}</strong></div>` : ''}`}${selected.kind === 'temple' ? `<div class="temple-stages">${['Laterite foundation', 'Sandstone towers', 'Sculpted reliefs'].map((s, i) => `<span class="${i < selected.level ? 'done' : ''}">${icon(i < selected.level ? 'check-circle' : 'circle')}${s}</span>`).join('')}</div>${templeUpgradeButton(selected, state)}` : ''}${!['baray', 'canal', 'moat', 'house', 'road', 'bridge'].includes(selected.kind) ? `<button class="secondary-button full-width" data-action="toggle-building">${icon(selected.enabled ? 'pause' : 'play')}${selected.kind === 'gate' ? (selected.enabled ? 'Close floodgate' : 'Open floodgate') : ['granary', 'workshop', 'warehouse'].includes(selected.kind) ? (selected.enabled ? 'Pause service' : 'Resume service') : selected.enabled ? 'Pause production' : 'Resume production'}</button>` : ''}<button class="remove-structure full-width" data-action="remove-structure" data-id="${selected.id}" aria-label="Remove structure">${icon('trash')}Remove structure<span>Review refund</span></button>`,
       );
       return;
     }
@@ -676,7 +1028,7 @@ export class HUD {
       );
       const stored = channels.reduce((n, t) => n + t.water, 0);
       this.renderInspector(
-        `<div class="panel-eyebrow">Hydraulic network ${icon('waves')}</div><h2>Water is life.</h2>${playerFeedback(state)}${waterWarnings(state)}<p class="panel-subtitle">Guide it wisely through your kingdom.</p><div class="big-stat">${fmt(stored * 40)}<small>m³ in reservoirs & canals</small></div><div class="detail-row"><span>Reservoirs</span><strong>${state.buildings.filter((b) => b.kind === 'baray' && !b.construction).length}</strong></div><div class="detail-row"><span>Canal tiles</span><strong>${state.tiles.filter((t) => t.terrain === 'canal').length}</strong></div><div class="detail-row"><span>Irrigated fields</span><strong>${state.buildings.filter((b) => b.kind === 'paddy' && !b.construction && WaterSimulation.irrigation(state, b.x, b.y) > 0.2).length}</strong></div><p class="building-description">The blue overlay reveals water depth. Low land fills first; connected canals carry water and stone through the city.</p><button class="primary-button" data-action="water-buildings">${icon('plus')}Build a reservoir</button>`,
+        `<div class="panel-eyebrow">Hydraulic network ${icon('waves')}</div><h2>Water is life.</h2>${waterPlanningTools()}${reservoirList(state)}${playerFeedback(state)}${waterWarnings(state)}<p class="panel-subtitle">Guide it wisely through your kingdom.</p><div class="big-stat">${fmt(stored * 40)}<small>m³ in reservoirs & canals</small></div><div class="detail-row"><span>Reservoirs</span><strong>${state.buildings.filter((b) => b.kind === 'baray' && !b.construction).length}</strong></div><div class="detail-row"><span>Canal tiles</span><strong>${state.tiles.filter((t) => t.terrain === 'canal').length}</strong></div><div class="detail-row"><span>Irrigated fields</span><strong>${state.buildings.filter((b) => b.kind === 'paddy' && !b.construction && WaterSimulation.irrigation(state, b.x, b.y) > 0.2).length}</strong></div><p class="building-description">Use depth, flow, and elevation overlays to plan connections. Low land fills first; connected canals carry water and stone through the city.</p><button class="primary-button" data-action="water-buildings">${icon('plus')}Build a reservoir</button>`,
       );
     } else if (this.panel === 'workforce') {
       this.renderInspector(logisticsPanel(state));
@@ -699,13 +1051,24 @@ export class HUD {
           .slice(0, 7)
           .map(
             (e) =>
-              `<article>${icon(e.icon)}<div><strong>${esc(e.title)}</strong><p>${esc(e.text)}</p><small>Day ${12 + Math.floor(e.tick / CONFIG.ticksPerDay)}</small></div></article>`,
+              `<article>${icon(e.icon)}<div><strong>${esc(e.title)}</strong><p>${esc(e.text)}</p><small>Day ${state.day - Math.floor(state.tick / CONFIG.ticksPerDay) + Math.floor(e.tick / CONFIG.ticksPerDay)}</small></div></article>`,
           )
           .join('')}</div>`,
       );
     }
   }
   private renderInspector(markup: string) {
+    const issue = this.activeIssue
+      ? kingdomAlerts(this.game.state).find((alert) => alert.id === this.activeIssue)
+      : null;
+    if (issue && this.selected && issue.sites.includes(this.selected) && issue.sites.length > 1)
+      markup =
+        `<button class="secondary-button full-width issue-next" data-action="locate-issue" data-issue="${issue.id}">Next affected site · ${issue.sites.length} need attention ${icon('arrow-right')}</button>` +
+        markup;
+    if (this.game.state.tutorial?.status === 'active' && this.selected)
+      markup =
+        '<button class="secondary-button full-width" data-action="panel" data-panel="tutorial">Return to tutorial lesson</button>' +
+        markup;
     if (markup === this.inspectorMarkup) return;
     this.inspectorMarkup = markup;
     const key = `${this.selected ?? this.panel}:${this.game.state.progression.claimed.length}`;
@@ -720,12 +1083,31 @@ export class HUD {
       sameView && this.inspector.contains(document.activeElement)
         ? (document.activeElement as HTMLElement)
         : null;
+    const histories = sameView
+      ? Array.from(
+          this.inspector.querySelectorAll<HTMLDetailsElement>('[data-reservoir-history]'),
+        ).map((d) => [d.dataset.reservoirHistory!, d.open] as const)
+      : [];
+    const focusedHistory = focused?.closest<HTMLElement>('[data-reservoir-history]')?.dataset
+      .reservoirHistory;
+    const focusedOverlay = focused?.dataset.overlay;
     const action = focused?.dataset.action;
     const id = focused?.dataset.id;
     const kind = focused?.dataset.kind;
     const panel = focused?.dataset.panel;
     const chapter = focused?.closest<HTMLElement>('[data-commission-id]')?.dataset.commissionId;
     this.inspector.innerHTML = markup;
+    for (const [id, open] of histories) {
+      const details = this.inspector.querySelector<HTMLDetailsElement>(
+        `[data-reservoir-history="${id}"]`,
+      );
+      if (details) details.open = open;
+    }
+    this.inspector.querySelectorAll<HTMLElement>('[data-action="overlay"]').forEach((button) => {
+      const active = button.dataset.overlay === this.overlay;
+      button.setAttribute('aria-pressed', String(active));
+      button.classList.toggle('active', active);
+    });
     this.inspectorViewKey = key;
     for (const [id, open] of chapters) {
       const details = this.inspector.querySelector<HTMLDetailsElement>(
@@ -742,9 +1124,14 @@ export class HUD {
           b.dataset.action === action &&
           b.dataset.id === id &&
           b.dataset.kind === kind &&
-          b.dataset.panel === panel,
+          b.dataset.panel === panel &&
+          b.dataset.overlay === focusedOverlay,
       );
       replacement?.focus({ preventScroll: true });
+    } else if (focusedHistory) {
+      this.inspector
+        .querySelector<HTMLElement>(`[data-reservoir-history="${focusedHistory}"] > summary`)
+        ?.focus({ preventScroll: true });
     } else if (chapter) {
       this.inspector
         .querySelector<HTMLElement>(`[data-commission-id="${chapter}"] > summary`)
@@ -790,7 +1177,9 @@ export class HUD {
     const status = this.root.querySelector('#save-status')!;
     status.textContent = 'Saving…';
     try {
-      const medium = await this.persistence.save(this.game.state);
+      const snapshot = structuredClone(this.game.state);
+      snapshot.speed = this.dialogResumeSpeed ?? snapshot.speed;
+      const medium = await this.persistence.save(snapshot, quiet ? 'autosave' : 'manual');
       status.textContent = 'Saved locally';
       if (!quiet)
         this.toast(
@@ -814,6 +1203,7 @@ export class HUD {
     }, 4200);
   }
   private openRelief(id: string) {
+    this.renderer.camera.cancelGesture();
     const b = this.game.state.buildings.find((b) => b.id === id && b.engineering);
     if (!b || b.level !== 2 || b.construction?.type !== 'upgrade') return;
     const dialog = this.root.querySelector<HTMLDialogElement>('dialog')!;
@@ -825,16 +1215,31 @@ export class HUD {
     dialog.innerHTML = reliefDialog(b);
     if (!dialog.open) dialog.showModal();
   }
+  private openScenarioPicker() {
+    const dialog = this.root.querySelector<HTMLDialogElement>('dialog')!;
+    this.renderer.camera.cancelGesture();
+    if (!dialog.open) {
+      this.dialogResumeSpeed = this.game.state.speed;
+      this.game.setSpeed(0);
+    }
+    dialog.setAttribute('aria-label', 'Choose a new scenario');
+    dialog.innerHTML = `<button class="dialog-close icon-button" data-action="close-dialog" aria-label="Close scenario selection">${icon('x')}</button><h2>Choose a new kingdom.</h2>${scenarioPicker(this.game.state.scenario ?? 'roluos')}<p>This replaces only the current save slot. Other kingdoms stay safe. Recent checkpoints remain in recovery until newer saves rotate them out. Download a copy from Settings to keep it permanently. The new kingdom will be saved and the main menu will open; choose Continue to play.</p><div class="settings-buttons"><button class="secondary-button" data-action="close-dialog">Keep this kingdom</button><button class="danger-button" data-action="confirm-scenario">Replace saved kingdom</button></div>`;
+    if (!dialog.open) dialog.showModal();
+    dialog.querySelector<HTMLButtonElement>('[data-action="close-dialog"]')?.focus();
+  }
   private openDialog(kind: 'guide' | 'settings') {
+    this.renderer.camera.cancelGesture();
     const dialog = this.root.querySelector<HTMLDialogElement>('dialog')!;
     this.dialogResumeSpeed = this.game.state.speed;
     this.game.setSpeed(0);
     dialog.setAttribute('aria-label', kind === 'guide' ? 'Builder’s guide' : 'Game settings');
-    dialog.innerHTML = `<button class="dialog-close icon-button" data-action="close-dialog" aria-label="Close dialog">${icon('x')}</button>${kind === 'guide' ? `<div class="dialog-symbol">${icon('book-open-text')}</div><span class="eyebrow">The royal builder’s guide</span><h2>Every great city<br>begins with water.</h2><p>Capture the monsoon in barays, connect your fields with canals, and turn a flourishing settlement into a temple city.</p><div class="guide-steps"><div>${icon('waves')}<span><strong>Capture & connect</strong>Build reservoirs on clear land. Join them to a river or a filled canal so water can flow.</span></div><div>${icon('grains')}<span><strong>Grow & sustain</strong>Irrigate paddies within two tiles of water. Workers bring rice and timber home over dry land. Roads speed up deliveries; timber bridges span waterways. Drought stress reaches crop failure at 70%; restore irrigation before harvests are lost.</span></div><div>${icon('bank')}<span><strong>Build & remember</strong>Connect quarries to river landings by water. Assign builders to each site. Follow the five royal commissions to earn rewards. At 200 merit unlock granaries; at 600 unlock workshops and sculpted sanctuaries.</span></div><div>${icon('warehouse')}<span><strong>Store & deliver</strong>Warehouses receive land cargo, expand storage, and add two carts when staffed. A staffed landing supplies one stone barge. Laterite comes from dedicated pits. Use Resources (R) to find finite mineral deposits and timber. People & logistics explains blocked deliveries.</span></div><div>${icon('bowl-food')}<span><strong>Weather & survive</strong>Feed residents daily. Hunger slows all work and prolonged shortages drive people away. Inspect Food & resilience for risks; repair flooded structures after water recedes.</span></div></div><div class="keyboard-guide"><span><kbd>Space</kbd>Pause</span><span><kbd>1</kbd>–<kbd>6</kbd>Build</span><span><kbd>W</kbd>Water</span><span><kbd>L</kbd>Logistics</span><span><kbd>R</kbd>Resources</span><span><kbd>G</kbd>Grid</span><span><kbd>X</kbd>Demolish</span><span><kbd>Esc</kbd>Cancel</span></div><button class="primary-button full-width" data-action="close-dialog">Begin your legacy ${icon('arrow-right')}</button>` : `<div class="dialog-symbol">${icon('sliders-horizontal')}</div><span class="eyebrow">Make yourself at home</span><h2>Your kingdom,<br>your way.</h2><p>Your city is saved automatically every 30 seconds in this browser. Download a copy to keep it with you.</p><div class="settings-row"><span><strong>Evening colors</strong><small>A softer glow after sunset</small></span><button class="theme-switch" role="switch" aria-label="Evening colors" aria-checked="${document.documentElement.dataset.theme === 'dark'}" data-action="theme"><span></span></button></div><div class="settings-buttons"><button class="secondary-button" data-action="export">${icon('download-simple')}Download save</button><button class="secondary-button" data-action="import">${icon('upload-simple')}Import save</button></div><button class="secondary-button full-width" data-action="save">${icon('floppy-disk')}Save kingdom now</button><button class="secondary-button full-width return-menu" data-action="return-menu">${icon('sign-out')}Save & return to main menu</button><div class="reset-section"><button class="text-button" data-action="reset">Start a new settlement</button><div id="reset-confirm" hidden><p>This replaces the city saved in this browser. Download a copy first if you want to keep it.</p><div class="settings-buttons"><button class="secondary-button" data-action="cancel-reset">Keep this city</button><button class="danger-button" data-action="confirm-reset">Start fresh</button></div></div></div>`}`;
+    dialog.innerHTML = `<button class="dialog-close icon-button" data-action="close-dialog" aria-label="Close dialog">${icon('x')}</button>${kind === 'guide' ? `<div class="dialog-symbol">${icon('book-open-text')}</div><span class="eyebrow">The royal builder’s guide</span><h2>Every great city<br>begins with water.</h2><p>Capture the monsoon in barays, connect your fields with canals, and turn a flourishing settlement into a temple city.</p><div class="guide-steps"><div>${icon('waves')}<span><strong>Capture & connect</strong>Build reservoirs on clear land. Join them to a river or a filled canal so water can flow. Use Flow (F) to see expected pressure-driven outflow and Elevation (E) to compare ground heights. Tap tiles for depth and surface levels; inspect a baray for its last 60 daily readings. Drag roads or canals to preview a route and its total cost, then release to build. Existing matching tiles are free; blocked or unaffordable routes spend nothing. Press Escape to cancel, or middle-drag / use arrow keys to pan.</span></div><div>${icon('grains')}<span><strong>Grow & sustain</strong>Irrigate paddies within two tiles of water. Workers bring rice and timber home over dry land. Roads speed up deliveries; timber bridges span waterways. Drought stress reaches crop failure at 70%; restore irrigation before harvests are lost.</span></div><div>${icon('bank')}<span><strong>Build & remember</strong>Connect quarries to river landings by water. Assign builders to each site. Follow the five royal commissions to earn rewards. At 200 merit unlock granaries; at 600 unlock workshops and sculpted sanctuaries.</span></div><div>${icon('warehouse')}<span><strong>Store & deliver</strong>Warehouses receive land cargo, expand storage, and add two carts when staffed. A staffed landing supplies one stone barge. Laterite comes from dedicated pits. Use Resources (R) to find finite mineral deposits and timber. People & logistics explains blocked deliveries.</span></div><div>${icon('bowl-food')}<span><strong>Weather & survive</strong>Feed residents daily. Hunger slows all work and prolonged shortages drive people away. Inspect Food & resilience for risks; repair flooded structures after water recedes.</span></div></div><button class="primary-button full-width" data-action="tutorial-start">Start or restart interactive tutorial</button><div class="keyboard-guide"><span><kbd>Space</kbd>Pause</span><span><kbd>1</kbd>–<kbd>6</kbd>Build</span><span><kbd>W</kbd>Water</span><span><kbd>L</kbd>Logistics</span><span><kbd>R</kbd>Resources</span><span><kbd>G</kbd>Grid</span><span><kbd>X</kbd>Demolish</span><span><kbd>Esc</kbd>Cancel</span></div><button class="primary-button full-width" data-action="close-dialog">Begin your legacy ${icon('arrow-right')}</button>` : `<div class="dialog-symbol">${icon('sliders-horizontal')}</div><span class="eyebrow">Make yourself at home</span><h2>Your kingdom,<br>your way.</h2><p>Your city is saved automatically every 30 seconds in this browser. Download a copy to keep it with you.</p><div class="settings-row"><span><strong>Evening colors</strong><small>A softer glow after sunset</small></span><button class="theme-switch" role="switch" aria-label="Evening colors" aria-checked="${document.documentElement.dataset.theme === 'dark'}" data-action="theme"><span></span></button></div>${this.audio.settingsMarkup()}${offlineSettings()}<section class="kingdom-settings"><h3>Save slot ${this.persistence.activeSlot}</h3>${kingdomNameInput(this.persistence.activeName)}<button class="secondary-button full-width" data-action="rename-kingdom">Rename kingdom</button><p>Autosaves stay in this slot. Save and return to the main menu to open another kingdom or recover an earlier save.</p></section><div class="settings-buttons"><button class="secondary-button" data-action="export">${icon('download-simple')}Download save</button><button class="secondary-button" data-action="import">${icon('upload-simple')}Import save</button></div><button class="secondary-button full-width" data-action="save">${icon('floppy-disk')}Save kingdom now</button><button class="secondary-button full-width return-menu" data-action="return-menu">${icon('sign-out')}Save & return to main menu</button><div class="reset-section"><button class="text-button" data-action="reset">Choose a new scenario</button></div>`}`;
     dialog.showModal();
   }
   destroy() {
     this.abort.abort();
+    this.dockObserver.disconnect();
+    this.celebrations.destroy();
     this.unsubscribe();
     clearTimeout(this.toastTimer);
   }

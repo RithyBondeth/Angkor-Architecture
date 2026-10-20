@@ -1,3 +1,5 @@
+import { MILESTONE_IDS } from './milestones';
+import { RESERVOIR_HISTORY_DAYS } from '../simulation/ReservoirHistory';
 import { BUILDINGS } from '../data/buildings';
 import { CONFIG } from '../data/config';
 import { completedBuilding, initialInvestment, registerInfrastructure } from './buildingState';
@@ -5,7 +7,7 @@ import { footprint } from './world';
 import { workforce } from '../simulation/Workforce';
 import { freshSurvival } from './survivalState';
 import { freshProgression } from './progressionState';
-import { COMMISSIONS } from '../data/progression';
+import { commissionsFor, isScenarioId } from '../data/scenarios';
 import { freshEngineering, RELIEF_TARGET } from '../simulation/TempleEngineering';
 import { seedDeposits } from '../simulation/Deposits';
 import { DELIVERY_ISSUES } from './types';
@@ -24,6 +26,30 @@ const record = (n: unknown): n is Record<string, unknown> =>
 function validateShape(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 = 6): boolean {
   if (!record(value)) return false;
   const s = value as unknown as GameState;
+  if (
+    value.milestones !== undefined &&
+    (!Array.isArray(value.milestones) ||
+      value.milestones.length > MILESTONE_IDS.length ||
+      new Set(value.milestones).size !== value.milestones.length ||
+      !value.milestones.every((id) => MILESTONE_IDS.includes(id)))
+  )
+    return false;
+  if (value.scenario !== undefined && !isScenarioId(value.scenario)) return false;
+  if (value.tutorial !== undefined) {
+    const t = value.tutorial;
+    const siteId = (id: unknown) => id === null || (typeof id === 'string' && /^b\d+$/.test(id));
+    if (
+      !record(t) ||
+      !['active', 'skipped', 'completed'].includes(t.status as string) ||
+      !integer(t.step, 0, 6) ||
+      !siteId(t.canalId) ||
+      !siteId(t.paddyId) ||
+      typeof t.inspected !== 'boolean' ||
+      typeof t.delivered !== 'boolean' ||
+      (t.status === 'completed' ? t.step !== 6 : t.step === 6)
+    )
+      return false;
+  }
   if (
     value.version !== version ||
     !integer(s.width, 8, 64) ||
@@ -118,6 +144,43 @@ function validateShape(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 = 6): bool
         occupied.add(key);
       }
   }
+  if (value.reservoirHistory !== undefined) {
+    if (
+      !Array.isArray(value.reservoirHistory) ||
+      value.reservoirHistory.length > Math.floor(s.tiles.length / 16)
+    )
+      return false;
+    const historyIds = new Set<string>();
+    for (const h of value.reservoirHistory) {
+      if (
+        !record(h) ||
+        typeof h.id !== 'string' ||
+        historyIds.has(h.id) ||
+        !s.buildings.some(
+          (b) => b.id === h.id && b.kind === 'baray' && b.construction?.type !== 'build',
+        ) ||
+        !Array.isArray(h.samples) ||
+        h.samples.length > RESERVOIR_HISTORY_DAYS
+      )
+        return false;
+      historyIds.add(h.id);
+      let previousTick = -1,
+        previousDay = 0;
+      for (const sample of h.samples) {
+        if (
+          !record(sample) ||
+          !integer(sample.tick, 0, s.tick) ||
+          !integer(sample.day, 1, s.day) ||
+          sample.tick <= previousTick ||
+          sample.day <= previousDay ||
+          !finite(sample.depth, 0, 1000)
+        )
+          return false;
+        previousTick = sample.tick;
+        previousDay = sample.day;
+      }
+    }
+  }
   if (version >= 3 && workforce(s).assigned > workforce(s).total) return false;
   if (!Array.isArray(s.couriers) || s.couriers.length > 36) return false;
   for (const c of s.couriers) {
@@ -184,19 +247,20 @@ function validateShape(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 = 6): bool
 
 function validProgression(s: GameState): boolean {
   const p = s.progression;
+  const commissions = commissionsFor(s);
   if (
     !record(p) ||
     !finite(p.meritPeak, 0, CONFIG.maxResource) ||
     !Array.isArray(p.claimed) ||
-    p.claimed.length > COMMISSIONS.length ||
-    !p.claimed.every((id, index) => id === COMMISSIONS[index]!.id) ||
+    p.claimed.length > commissions.length ||
+    !p.claimed.every((id, index) => id === commissions[index]!.id) ||
     !record(p.delivered) ||
     !Object.entries(p.delivered).every(([r, n]) => resources.includes(r) && finite(n)) ||
     !integer(p.lastDayTick, 0, s.tick) ||
     !integer(p.streakDays, 0, 7)
   )
     return false;
-  const goal = COMMISSIONS[p.claimed.length]?.goals.find((g) => g.type === 'sustain');
+  const goal = commissions[p.claimed.length]?.goals.find((g) => g.type === 'sustain');
   return goal ? p.streakDays <= goal.target : p.streakDays === 0;
 }
 

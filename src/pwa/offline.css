@@ -1,0 +1,21 @@
+.offline-settings {
+  margin: 24px 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.offline-settings h3 {
+  font-size: 18px;
+}
+.offline-settings p {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.offline-settings [data-pwa-status] {
+  font-weight: 600;
+}
+.offline-settings [hidden] {
+  display: none !important;
+}
+.offline-settings .settings-buttons {
+  flex-wrap: wrap;
+}

@@ -1,3 +1,11 @@
+import { obstructsTile } from './occlusion';
+import { TouchPlacement } from '../core/touchPlacement';
+import type { SiteAdvice } from '../simulation/PlacementAdvice';
+import { scenarioFor } from '../data/scenarios';
+import { dominantFlows } from '../simulation/waterFlow';
+import { elevationRange, elevationColor, waterTileDescription } from '../simulation/WaterPlanning';
+import { isRouteKind } from '../core/buildRoute';
+import type { RoutePreview } from '../core/buildRoute';
 import { Application, Container, Graphics, Sprite, Text } from 'pixi.js';
 import { moatRing, templeBlocked } from '../simulation/TempleEngineering';
 import { BUILDINGS } from '../data/buildings';
@@ -21,7 +29,9 @@ export class WorldRenderer {
   private readonly ground = new Container();
   private readonly objects = new Container();
   private readonly routes = new Graphics();
+  private readonly flowArrows = new Graphics();
   private readonly highlight = new Graphics();
+  private readonly tutorialMarker = new Graphics();
   private readonly ambience = new Graphics();
   private readonly ghost = new Sprite();
   private readonly tileSprites: Sprite[] = [];
@@ -31,28 +41,33 @@ export class WorldRenderer {
   private readonly treeSprites = new Map<number, Sprite>();
   private readonly sites = new Map<string, ReturnType<typeof constructionSite>>();
   private readonly riskLabels = new Map<string, Text>();
+  private readonly touchPlacement = new TouchPlacement();
   private demolition = false;
   private readonly labels = new Container();
   private selected: string | null = null;
   private placement: BuildingKind | null = null;
   private hover: Point | null = null;
+  private routeStart: Point | null = null;
+  private routeEnd: Point | null = null;
   private overlay: Overlay = 'none';
   private resizeObserver!: ResizeObserver;
+  private readonly abort = new AbortController();
   private unsubscribe?: () => void;
   private readonly reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  onPreview: (message: string, ok: boolean) => void = () => {};
+  onRoutePreview: (preview: RoutePreview | null) => void = () => {};
+  onPreview: (message: string, ok: boolean, advice: SiteAdvice[]) => void = () => {};
   onResource: (message: string) => void = () => {};
-  onSelect: (id: string | null) => void = () => {};
+  onSelect: (id: string | null, placed?: boolean) => void = () => {};
   onPlace: (message: string, ok: boolean) => void = () => {};
   onHover: (message: string) => void = () => {};
   onZoom: (zoom: number) => void = () => {};
+  onTouchPlan: (active: boolean) => void = () => {};
   onDemolish: (id: string) => void = () => {};
   constructor(
     private readonly game: Game,
     private readonly host: HTMLElement,
   ) {}
   async init() {
-    await this.atlas.loadIllustrations();
     await this.app.init({
       resizeTo: this.host,
       backgroundAlpha: 0,
@@ -72,9 +87,11 @@ export class WorldRenderer {
       this.ground,
       this.routes,
       this.objects,
+      this.flowArrows,
       this.labels,
       this.ghost,
       this.highlight,
+      this.tutorialMarker,
     );
     this.objects.sortableChildren = true;
     this.app.stage.addChild(this.world, this.ambience);
@@ -94,13 +111,66 @@ export class WorldRenderer {
     }
     this.addLabel('ROYAL BARAY', 8.5, 8.5, 76);
     this.addLabel('PRASAT SANCTUARY', 17.5, 14.5, 112);
-    this.addLabel('TONLÉ SAP', 28, 20, 0);
+    this.addLabel(scenarioFor(this.game.state).waterName, 28, 20, 0);
     this.camera = new Camera(
       this.world,
       this.host,
-      (x, y) => this.click(x, y),
+      (x, y, touch) => this.click(x, y, touch),
       (x, y) => this.move(x, y),
       (zoom) => this.onZoom(zoom),
+      {
+        start: (x, y) => {
+          if (!isRouteKind(this.placement) || this.demolition) return false;
+          this.routeStart = this.routeEnd = this.point(x, y);
+          this.guideSite(null);
+          this.drawHighlight();
+          return true;
+        },
+        move: (x, y) => {
+          this.hover = this.routeEnd = this.point(x, y);
+          this.drawHighlight();
+        },
+        end: (x, y) => {
+          const start = this.routeStart;
+          const kind = this.placement;
+          const end = this.point(x, y);
+          this.hover = end;
+          this.cancelRoute();
+          if (!start || !isRouteKind(kind)) return;
+          const result = this.game.placeRoute(kind, start, end);
+          this.onPlace(result.message, result.ok);
+          if (result.ok && start.x === end.x && start.y === end.y) {
+            const b = buildingAt(this.game.state, start.x, start.y);
+            this.select(b?.id ?? null);
+            this.onSelect(b?.id ?? null, true);
+          }
+          this.drawHighlight();
+        },
+        cancel: () => {
+          this.cancelTouchPlacement();
+          this.cancelRoute();
+        },
+      },
+    );
+    this.host.addEventListener(
+      'pointerleave',
+      () => {
+        if (!this.touchPlacement.plan && !this.routeStart) {
+          this.hover = null;
+          this.drawHighlight();
+        }
+      },
+      { signal: this.abort.signal },
+    );
+    window.addEventListener('blur', () => this.camera.cancelGesture(), {
+      signal: this.abort.signal,
+    });
+    document.addEventListener(
+      'visibilitychange',
+      () => {
+        if (document.hidden) this.camera.cancelGesture();
+      },
+      { signal: this.abort.signal },
     );
     this.camera.reset();
     this.resizeObserver = new ResizeObserver(() => {
@@ -130,6 +200,7 @@ export class WorldRenderer {
   }
   private sync() {
     const state = this.game.state;
+    this.objects.alpha = this.overlay === 'elevation' ? 0.4 : this.overlay === 'flow' ? 0.7 : 1;
     for (let i = 0; i < state.tiles.length; i++) {
       const t = state.tiles[i]!;
       const sprite = this.tileSprites[i]!;
@@ -150,7 +221,7 @@ export class WorldRenderer {
               : 0x8e9988;
       const channel = ['water', 'reservoir', 'moat', 'canal', 'bridge'].includes(t.terrain);
       const flood = this.waterMarkers[i]!;
-      flood.alpha = channel ? 0 : Math.min(0.6, t.water * 0.55);
+      flood.alpha = this.overlay === 'elevation' || channel ? 0 : Math.min(0.6, t.water * 0.55);
       if (channel && t.water < 0.45) sprite.tint = 0xa7ac7b;
       if (t.terrain === 'forest' && !buildingAt(state, t.x, t.y)) {
         if (!this.treeSprites.has(i)) {
@@ -356,25 +427,107 @@ export class WorldRenderer {
     this.selected = id;
     this.sync();
   }
+  guideSite(site: (Point & { kind: BuildingKind }) | null) {
+    this.tutorialMarker.clear();
+    if (!site) return;
+    this.hover = site;
+    this.drawHighlight();
+    for (const cell of footprint(site)) {
+      const p = toScreen(cell.x, cell.y);
+      this.tutorialMarker
+        .poly([p.x, p.y - 18, p.x + 36, p.y, p.x, p.y + 18, p.x - 36, p.y])
+        .fill({ color: 0xffd66b, alpha: 0.25 })
+        .stroke({ color: 0xffd66b, width: 3 });
+    }
+  }
+  private cancelRoute() {
+    this.routeStart = this.routeEnd = null;
+    this.onRoutePreview(null);
+    this.drawHighlight();
+  }
   setPlacement(kind: BuildingKind | null) {
+    this.camera.cancelGesture();
+    this.guideSite(null);
     this.placement = kind;
     this.host.classList.toggle('placing', !!kind);
     this.drawHighlight();
   }
   setDemolition(active: boolean) {
+    this.camera.cancelGesture();
     this.demolition = active;
     this.host.classList.toggle('demolishing', active);
     this.drawHighlight();
   }
   setOverlay(overlay: Overlay) {
+    this.cancelTouchPlacement();
     this.overlay = overlay;
     this.sync();
+  }
+  cancelTouchPlacement() {
+    if (!this.touchPlacement.plan) return;
+    this.touchPlacement.cancel();
+    this.hover = null;
+    this.onTouchPlan(false);
+    this.drawHighlight();
+  }
+  confirmTouchPlacement() {
+    const plan = this.touchPlacement.plan;
+    if (!plan) return;
+    const result = this.touchPlacement.confirm(this.game);
+    this.onPlace(result.message, result.ok);
+    this.onTouchPlan(!!this.touchPlacement.plan);
+    if (result.ok) {
+      const b = buildingAt(this.game.state, plan.end.x, plan.end.y);
+      this.select(b?.id ?? null);
+      this.onSelect(b?.id ?? null, true);
+    }
+    this.drawHighlight();
+  }
+  focusBuilding(id: string) {
+    const b = this.game.state.buildings.find((b) => b.id === id);
+    if (!b) return;
+    const size = BUILDINGS[b.kind].size;
+    const p = toScreen(b.x + (size - 1) / 2, b.y + (size - 1) / 2);
+    this.camera.cancelGesture();
+    this.world.position.set(
+      this.host.clientWidth * (this.host.clientWidth > 900 ? 0.42 : 0.38) - p.x * this.camera.zoom,
+      this.host.clientHeight * 0.56 - p.y * this.camera.zoom,
+    );
+    this.select(id);
+  }
+  private fadeObstructions() {
+    const target = this.hover ? toScreen(this.hover.x, this.hover.y) : null;
+    for (const b of this.game.state.buildings) {
+      const sprite = this.buildingSprites.get(b.id);
+      if (!sprite) continue;
+      const base =
+        b.construction?.type === 'build'
+          ? 0.28
+          : b.construction?.type === 'upgrade'
+            ? 0.7
+            : b.enabled
+              ? 1
+              : 0.55;
+      sprite.alpha = obstructsTile(b, this.hover) ? Math.min(base, 0.25) : base;
+    }
+    for (const tree of this.treeSprites.values())
+      tree.alpha =
+        target && Math.abs(target.x - tree.x) < 30 && target.y < tree.y && target.y > tree.y - 90
+          ? 0.25
+          : 1;
   }
   private point(x: number, y: number) {
     return toGrid((x - this.world.x) / this.camera.zoom, (y - this.world.y) / this.camera.zoom);
   }
-  private click(x: number, y: number) {
+  private click(x: number, y: number, touch = false) {
     const p = this.point(x, y);
+    if (touch && this.placement && !this.demolition) {
+      this.touchPlacement.stage(this.placement, p);
+      this.hover = p;
+      this.onTouchPlan(true);
+      this.drawHighlight();
+      return;
+    }
     if (this.demolition) {
       const b = buildingAt(this.game.state, p.x, p.y);
       if (b) this.onDemolish(b.id);
@@ -385,16 +538,16 @@ export class WorldRenderer {
       if (result.ok) {
         const b = buildingAt(this.game.state, p.x, p.y);
         this.select(b?.id ?? null);
-        this.onSelect(b?.id ?? null);
+        this.onSelect(b?.id ?? null, true);
       }
     } else {
       const b = buildingAt(this.game.state, p.x, p.y);
       this.select(b?.id ?? null);
       this.onSelect(b?.id ?? null);
-      if (this.overlay === 'resources') {
-        const t = tileAt(this.game.state, p.x, p.y);
-        if (t) this.onResource(resourceDescription(t));
-      }
+      const tile = tileAt(this.game.state, p.x, p.y);
+      if (tile && ['water', 'flow', 'elevation'].includes(this.overlay))
+        this.onResource(waterTileDescription(this.game.state, tile));
+      else if (tile && this.overlay === 'resources') this.onResource(resourceDescription(tile));
     }
   }
   private move(x: number, y: number) {
@@ -414,17 +567,40 @@ export class WorldRenderer {
       const b = buildingAt(this.game.state, p.x, p.y);
       const t = tileAt(this.game.state, p.x, p.y);
       this.onHover(
-        this.overlay === 'resources' && t
-          ? resourceDescription(t)
-          : b
-            ? BUILDINGS[b.kind].name
-            : 'Drag to explore • Scroll to zoom',
+        t && ['water', 'flow', 'elevation'].includes(this.overlay)
+          ? waterTileDescription(this.game.state, t)
+          : this.overlay === 'resources' && t
+            ? resourceDescription(t)
+            : b
+              ? BUILDINGS[b.kind].name
+              : 'Drag to explore • Scroll to zoom',
       );
     }
   }
   private drawHighlight() {
+    this.fadeObstructions();
     this.highlight.clear();
     this.ghost.visible = false;
+    const routeStart = this.routeStart ?? this.touchPlacement.plan?.start;
+    const routeEnd = this.routeEnd ?? this.touchPlacement.plan?.end;
+    if (routeStart && routeEnd && isRouteKind(this.placement)) {
+      const preview = this.game.previewRoute(this.placement, routeStart, routeEnd);
+      for (const { point, status } of preview.cells) {
+        const p = toScreen(point.x, point.y);
+        const color =
+          status === 'existing'
+            ? 0x8bd5eb
+            : status === 'blocked' || !preview.ok
+              ? 0xe47c60
+              : 0xf2dfab;
+        this.highlight
+          .poly([p.x, p.y - 18, p.x + 36, p.y, p.x, p.y + 18, p.x - 36, p.y])
+          .fill({ color, alpha: 0.35 })
+          .stroke({ color, width: 2 });
+      }
+      this.onRoutePreview(preview);
+      return;
+    }
     const selected = this.game.state.buildings.find((b) => b.id === this.selected);
     const origin =
       this.demolition && this.hover
@@ -448,7 +624,7 @@ export class WorldRenderer {
       }
     const cells = footprint(origin);
     if (this.placement && this.hover) {
-      const result = this.game.canPlace(this.placement, this.hover);
+      const result = this.game.previewPlacement(this.placement, this.hover);
       const size = BUILDINGS[this.placement].size;
       this.ghost.texture = this.atlas.get(
         this.placement === 'temple' ? 'temple-foundation' : this.placement,
@@ -460,7 +636,7 @@ export class WorldRenderer {
       this.ghost.alpha = 0.5;
       this.ghost.tint = result.ok ? 0xdcebc3 : 0xe6a18c;
       this.ghost.visible = true;
-      this.onPreview(result.message, result.ok);
+      this.onPreview(result.message, result.ok, result.advice);
     }
     const valid = this.demolition
       ? false
@@ -478,6 +654,51 @@ export class WorldRenderer {
   }
   private drawRoutes() {
     this.routes.clear();
+    this.flowArrows.clear();
+    const state = this.game.state;
+    if (this.overlay === 'elevation') {
+      const range = elevationRange(state);
+      for (const t of state.tiles) {
+        const p = toScreen(t.x, t.y);
+        this.routes
+          .poly([p.x, p.y - 18, p.x + 36, p.y, p.x, p.y + 18, p.x - 36, p.y])
+          .fill({ color: elevationColor(t.elevation, range), alpha: 0.85 });
+      }
+    }
+    if (this.overlay === 'flow') {
+      for (const flow of dominantFlows(state).values()) {
+        const from = state.tiles[flow.from]!,
+          to = state.tiles[flow.to]!;
+        const a = toScreen(from.x, from.y),
+          b = toScreen(to.x, to.y);
+        const dx = b.x - a.x,
+          dy = b.y - a.y;
+        const sx = a.x + dx * 0.12,
+          sy = a.y + dy * 0.12;
+        const ex = a.x + dx * 0.8,
+          ey = a.y + dy * 0.8;
+        const width = 1.5 + Math.min(3, Math.sqrt(flow.amount) * 5);
+        this.flowArrows
+          .moveTo(sx, sy)
+          .lineTo(ex, ey)
+          .stroke({ color: 0x173d56, width: width + 2 });
+        this.flowArrows.moveTo(sx, sy).lineTo(ex, ey).stroke({ color: 0xe1f8ff, width });
+        const length = Math.hypot(dx, dy),
+          ux = dx / length,
+          uy = dy / length;
+        this.flowArrows
+          .poly([
+            ex,
+            ey,
+            ex - ux * 8 - uy * 4,
+            ey - uy * 8 + ux * 4,
+            ex - ux * 8 + uy * 4,
+            ey - uy * 8 - ux * 4,
+          ])
+          .fill(0xe1f8ff)
+          .stroke({ color: 0x173d56, width: 1 });
+      }
+    }
     if (this.overlay === 'resources')
       for (const t of this.game.state.tiles) {
         if (!t.mineral || t.mineral.remaining <= 0) continue;
@@ -505,6 +726,7 @@ export class WorldRenderer {
     }
   }
   destroy() {
+    this.abort.abort();
     this.unsubscribe?.();
     this.resizeObserver.disconnect();
     this.camera.destroy();
