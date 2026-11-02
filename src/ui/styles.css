@@ -94,7 +94,7 @@
 }
 
 :root {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Ubuntu', 'Bayon', sans-serif;
   color: var(--ink);
   background: #f4f5ed;
   font-synthesis: none;
@@ -201,14 +201,16 @@ p {
   padding: 0 6px;
   color: #e4d6b0;
   font:
-    600 26px/0.93 'Cormorant Garamond',
-    serif;
+    600 26px/0.93 'Ubuntu',
+    'Bayon',
+    sans-serif;
   letter-spacing: 2.5px;
 }
 .brand small {
   display: block;
   font:
-    500 10px 'DM Sans',
+    500 10px 'Ubuntu',
+    'Bayon',
     sans-serif;
   letter-spacing: 4.6px;
   margin-top: 9px;
@@ -245,8 +247,9 @@ p {
   background: #bbc5a70a;
   border-radius: 50%;
   font:
-    600 22px 'Cormorant Garamond',
-    serif;
+    600 22px 'Ubuntu',
+    'Bayon',
+    sans-serif;
   color: #d7d8b3;
 }
 .settlement-badge strong {
@@ -332,8 +335,9 @@ nav {
 .sidebar-bottom h3 {
   margin: 0 10px;
   font:
-    500 21px/1.1 'Cormorant Garamond',
-    serif;
+    500 21px/1.1 'Ubuntu',
+    'Bayon',
+    sans-serif;
   color: #dce0c3;
   max-width: 160px;
 }
@@ -495,8 +499,9 @@ nav {
   outline: 1px solid var(--border);
   border-radius: 50%;
   font:
-    600 19px 'Cormorant Garamond',
-    serif;
+    600 19px 'Ubuntu',
+    'Bayon',
+    sans-serif;
   color: #58714e;
 }
 .resource-bar {
@@ -636,8 +641,9 @@ nav {
 }
 .world-loading strong {
   font:
-    600 28px 'Cormorant Garamond',
-    serif;
+    600 28px 'Ubuntu',
+    'Bayon',
+    sans-serif;
 }
 .world-loading > span:last-child {
   font-size: 11px;
@@ -669,8 +675,9 @@ nav {
 }
 .world-heading h1 {
   font:
-    500 42px/1.2 'Cormorant Garamond',
-    serif;
+    500 42px/1.2 'Ubuntu',
+    'Bayon',
+    sans-serif;
   letter-spacing: -1px;
   color: #344f37;
   margin-top: 5px;
@@ -785,8 +792,9 @@ nav {
 .inspector h2 {
   margin-top: 9px;
   font:
-    500 30px/0.99 'Cormorant Garamond',
-    serif;
+    500 30px/0.99 'Ubuntu',
+    'Bayon',
+    sans-serif;
   letter-spacing: -0.5px;
   color: var(--ink);
 }
@@ -1027,8 +1035,9 @@ nav {
 }
 .big-stat {
   font:
-    500 44px 'Cormorant Garamond',
-    serif;
+    500 44px 'Ubuntu',
+    'Bayon',
+    sans-serif;
   color: #63815a;
   letter-spacing: -1px;
   margin: 23px 0;
@@ -1036,7 +1045,8 @@ nav {
 .big-stat small {
   display: block;
   font:
-    400 9px 'DM Sans',
+    400 9px 'Ubuntu',
+    'Bayon',
     sans-serif;
   letter-spacing: 0;
   color: var(--muted);
@@ -1552,7 +1562,8 @@ nav {
 }
 .placement-banner kbd {
   font:
-    400 8px 'DM Sans',
+    400 8px 'Ubuntu',
+    'Bayon',
     sans-serif;
   border: 1px solid var(--border);
   padding: 3px 4px;
@@ -1628,8 +1639,9 @@ dialog::backdrop {
 }
 dialog h2 {
   font:
-    500 39px/1 'Cormorant Garamond',
-    serif;
+    500 39px/1 'Ubuntu',
+    'Bayon',
+    sans-serif;
   letter-spacing: -0.7px;
   margin-top: 12px;
 }
@@ -1682,7 +1694,8 @@ dialog > p {
 }
 .keyboard-guide kbd {
   font:
-    400 8px 'DM Sans',
+    400 8px 'Ubuntu',
+    'Bayon',
     sans-serif;
   border: 1px solid var(--border);
   border-bottom-width: 2px;
@@ -2722,8 +2735,9 @@ dialog > p {
 .construction-summary strong {
   display: block;
   font:
-    500 30px 'Cormorant Garamond',
-    serif;
+    500 30px 'Ubuntu',
+    'Bayon',
+    sans-serif;
   color: var(--green);
 }
 .construction-summary span {
@@ -2971,7 +2985,7 @@ dialog > p {
   justify-content: space-between;
   align-items: center;
   margin: 22px 0 10px;
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Ubuntu', 'Bayon', sans-serif;
   font-size: 12px;
 }
 .resilience-heading > span {
@@ -3284,4 +3298,9 @@ dialog > p {
     right: 3px;
     top: 3px;
   }
+}
+
+/* Khmer script everywhere uses Bayon. */
+:lang(km) {
+  font-family: 'Bayon', sans-serif;
 }

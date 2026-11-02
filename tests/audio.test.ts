@@ -131,7 +131,8 @@ describe('procedural audio lifecycle', () => {
     expect(gains[1]!.connect).toHaveBeenCalledWith(gains[0]);
     expect(gains[2]!.connect).toHaveBeenCalledWith(gains[0]);
     engine.setPreferences({ ...AUDIO_DEFAULTS, master: 0.4, effects: 0.3, ambience: 0.8 });
-    expect(gains.map((n) => n.gain.value)).toEqual([0.4, 0.3, 0.8 * 0.22]);
+    // Music and nature buses stay silent until a menu or kingdom scene is chosen.
+    expect(gains.map((n) => n.gain.value)).toEqual([0.4, 0.3, 0.8 * 0.22, 0, 0]);
     engine.setWet(false);
     expect(gains[2]!.gain.value).toBe(0.8 * 0.13);
     engine.setPlaying(false);
@@ -170,7 +171,8 @@ describe('procedural audio lifecycle', () => {
     engine.setVisible(true);
     await engine.unlock();
     expect(ctx.state).toBe('running');
-    expect(streams).toHaveLength(1);
+    // One looping water bed; the canal's splash is a short, separate noise burst.
+    expect(streams.filter((n) => (n as unknown as { loop?: boolean }).loop)).toHaveLength(1);
     engine.destroy();
     engine.destroy();
     expect(ctx.close).toHaveBeenCalledOnce();
@@ -214,5 +216,66 @@ describe('transient placement feedback', () => {
     off();
     game.place('canal', { x: 9, y: 5 });
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('music, nature, and interface sounds', () => {
+  it('play pinpeat music only once a scene is chosen, and stop when muted or hidden', async () => {
+    vi.useFakeTimers();
+    try {
+      const { engine, ctx, oscillators, gains } = setup();
+      await engine.unlock();
+      vi.advanceTimersByTime(1000);
+      expect(oscillators).toHaveLength(0);
+      engine.setScene('menu');
+      expect(oscillators.length).toBeGreaterThan(0);
+      expect(gains[3]!.gain.value).toBeCloseTo(AUDIO_DEFAULTS.music * 0.6);
+      engine.setPreferences({ ...AUDIO_DEFAULTS, muted: true });
+      const before = oscillators.length;
+      ctx.currentTime = 30;
+      vi.advanceTimersByTime(5000);
+      expect(oscillators).toHaveLength(before);
+      expect(gains[3]!.gain.value).toBe(0);
+      engine.setPreferences({ ...AUDIO_DEFAULTS });
+      engine.setVisible(false);
+      const hidden = oscillators.length;
+      ctx.currentTime = 60;
+      vi.advanceTimersByTime(5000);
+      expect(oscillators).toHaveLength(hidden);
+      engine.destroy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('respects mute and pacing for interface and building cues', async () => {
+    const { engine, ctx, oscillators } = setup();
+    await engine.unlock();
+    engine.cue('click');
+    engine.cue('click');
+    const once = oscillators.length;
+    expect(once).toBeGreaterThan(0);
+    ctx.currentTime = 1;
+    engine.cue('milestone');
+    engine.playPlacement('temple');
+    engine.playPlacement('lotusraft');
+    expect(oscillators.length).toBeGreaterThan(once);
+    engine.setPreferences({ ...AUDIO_DEFAULTS, muted: true });
+    const muted = oscillators.length;
+    ctx.currentTime = 5;
+    engine.cue('season');
+    engine.playCompletion();
+    expect(oscillators).toHaveLength(muted);
+    engine.destroy();
+  });
+
+  it('saves a separate, clamped music volume', () => {
+    expect(readAudioPreferences({ getItem: () => JSON.stringify({ music: 3 }) })).toEqual({
+      ...AUDIO_DEFAULTS,
+      music: 1,
+    });
+    expect(readAudioPreferences({ getItem: () => JSON.stringify({ music: 'loud' }) }).music).toBe(
+      AUDIO_DEFAULTS.music,
+    );
   });
 });

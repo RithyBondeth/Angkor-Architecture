@@ -16,7 +16,8 @@ function standing(b: Building) {
 /** Homes within reach of a finished decoration. */
 export function homesNear(state: GameState, decor: Building): number {
   return state.buildings.filter(
-    (h) => h.kind === 'house' && standing(h) && footprintDistance(h, decor) <= BEAUTY_REACH,
+    (h) =>
+      !!BUILDINGS[h.kind].housing && standing(h) && footprintDistance(h, decor) <= BEAUTY_REACH,
   ).length;
 }
 

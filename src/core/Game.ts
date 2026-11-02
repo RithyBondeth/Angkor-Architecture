@@ -21,7 +21,7 @@ import { Logistics } from '../simulation/Logistics';
 import { Construction } from '../simulation/Construction';
 import { reconcileBuilders, workforce } from '../simulation/Workforce';
 import { SeasonManager } from './SeasonManager';
-import { buildingAt, footprint, tileAt } from './world';
+import { buildingAt, footprint, neighbors, tileAt } from './world';
 import { captureTerrain } from './buildingState';
 import { Survival } from '../simulation/Survival';
 import { floodUnsafe, housingCapacity, repairCost } from '../simulation/survivalRules';
@@ -149,6 +149,23 @@ export class Game {
     )
       return { ok: false, message: 'There is already a building or project on this site.' };
     const tile = tileAt(this.state, p.x, p.y)!;
+    if (def.onWater) {
+      if (!cells.every((c) => tileAt(this.state, c.x, c.y)!.terrain === 'water'))
+        return { ok: false, message: `${def.name} must float on open river or lake water.` };
+      if (
+        kind === 'stilthouse' &&
+        !cells.some((c) =>
+          neighbors(c).some((n) =>
+            ['grass', 'forest', 'road'].includes(tileAt(this.state, n.x, n.y)?.terrain ?? ''),
+          ),
+        )
+      )
+        return { ok: false, message: 'Raise a stilt house beside the riverbank.' };
+      for (const [key, cost] of Object.entries(def.cost))
+        if (this.state.resources[key as Resource] < cost)
+          return { ok: false, message: `Not enough ${key} to start this project.` };
+      return { ok: true, message: `Click to start ${def.name.toLowerCase()}.` };
+    }
     if (
       kind === 'moat' &&
       !this.state.buildings.some((b) => b.kind === 'temple' && siteDistance(p, b) <= 2)
@@ -195,6 +212,13 @@ export class Game {
       )
     )
       return { ok: false, message: 'Place a landing within two tiles of a waterway.' };
+    if (
+      kind === 'fishery' &&
+      !cells.some((c) =>
+        neighbors(c).some((n) => tileAt(this.state, n.x, n.y)?.terrain === 'water'),
+      )
+    )
+      return { ok: false, message: 'Place a fishing pier beside open river or lake water.' };
     if (
       ['quarry', 'lateritepit', 'lumber'].includes(kind) &&
       remainingDeposit(this.state, { ...p, kind }) <= 0
@@ -626,7 +650,7 @@ export class Game {
       tile.elevation = before.elevation;
     }
     if (b.underlay) this.state.buildings.push(b.underlay);
-    if (b.kind === 'house' && !pendingBuild)
+    if (BUILDINGS[b.kind].housing && !pendingBuild)
       this.state.population -= Math.min(
         8,
         b.condition > 0

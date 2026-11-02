@@ -1,3 +1,4 @@
+import { BUILDINGS } from '../data/buildings';
 import { CONFIG } from '../data/config';
 import { commissionsFor } from '../data/scenarios';
 import { UNLOCKS } from '../data/progression';
@@ -45,7 +46,7 @@ function sustained(state: GameState, goal: Extract<CampaignGoal, { type: 'sustai
     return false;
   if (goal.condition === 'dry-resilience')
     return !SeasonManager.at(state.day).wet && irrigatedFields(state) >= 2;
-  return !state.buildings.some((b) => b.kind === 'house' && b.condition === 0);
+  return !state.buildings.some((b) => !!BUILDINGS[b.kind].housing && b.condition === 0);
 }
 
 /** One commission at a time. Rewards and era unlocks become durable state exactly once. */

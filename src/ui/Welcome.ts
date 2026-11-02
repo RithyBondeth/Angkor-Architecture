@@ -5,72 +5,78 @@ import type { AudioController } from '../audio/AudioController';
 import { scenarioPicker, selectedScenario, updateScenarioDetails } from './ScenarioSelection';
 import { scenarioFor } from '../data/scenarios';
 import { createScenario } from '../core/world';
-import type { BuildingKind, GameState } from '../core/types';
+import type { GameState } from '../core/types';
 import { icon } from './icons';
 import { angkorEmblem } from './emblem';
-import { BUILDINGS } from '../data/buildings';
-import type { ModelKey } from '../rendering/models/models';
+import { Game } from '../core/Game';
+import { GameLoop } from '../core/GameLoop';
+import { WorldRenderer } from '../rendering/WorldRenderer';
+import { showcaseKingdom } from '../core/showcaseKingdom';
 import './welcome.css';
 
-/** Modelled pieces only: each name must also be a ModelKey. */
-const SHOWCASE: (BuildingKind & ModelKey)[] = [
-  'facetower',
-  'elephant',
-  'pavilion',
-  'lotuspond',
-  'gopura',
-  'parasol',
-  'market',
-  'singha',
-  'brazier',
-];
-let showcaseTimer = 0;
-function stopShowcase() {
-  clearInterval(showcaseTimer);
-}
-/** Render a few 3D pieces once the menu has painted, then rotate through them. */
-function startShowcase(root: HTMLElement) {
-  window.setTimeout(() => {
-    void import('../rendering/models/showcase').then(({ renderShowcase }) => {
-      const panel = root.querySelector<HTMLElement>('.welcome-showcase');
-      if (!panel) return;
-      const images = renderShowcase(SHOWCASE.map((key) => ({ key, size: BUILDINGS[key].size })));
-      if (!images || !panel.isConnected) return;
-      const dots = panel.querySelector<HTMLElement>('.showcase-dots')!;
-      dots.innerHTML = SHOWCASE.map(
-        (key, i) =>
-          `<button data-showcase="${i}" aria-label="Show ${BUILDINGS[key].name}"></button>`,
-      ).join('');
-      let index = 0;
-      const show = (next: number) => {
-        index = (next + SHOWCASE.length) % SHOWCASE.length;
-        const def = BUILDINGS[SHOWCASE[index]!];
-        const stage = panel.querySelector<HTMLElement>('.showcase-stage')!;
-        stage.querySelector('img')!.src = images[index]!;
-        stage.classList.remove('arrive');
-        void stage.offsetWidth;
-        stage.classList.add('arrive');
-        panel.querySelector('.showcase-tag')!.textContent =
-          def.category === 'wonder' ? 'Wonder' : 'Garden & decor';
-        panel.querySelector('.showcase-info strong')!.textContent = def.name;
-        panel.querySelector('.showcase-info small')!.textContent = def.subtitle;
-        panel.querySelector('.showcase-info .appeal-badge')!.textContent = `+${def.appeal} beauty`;
-        dots
-          .querySelectorAll('button')
-          .forEach((dot, i) => dot.setAttribute('aria-current', String(i === index)));
-      };
-      dots.addEventListener('click', (event) => {
-        const dot = (event.target as HTMLElement).closest<HTMLElement>('[data-showcase]');
-        if (!dot) return;
-        show(Number(dot.dataset.showcase));
-        stopShowcase();
+/**
+ * A living kingdom behind the menu: the finished showcase city, running and drifting slowly.
+ * It is never saved, and its artwork is reused by the game.
+ */
+class MenuBackdrop {
+  private timer = 0;
+  private stopped = false;
+  private loop: GameLoop | null = null;
+  private renderer: WorldRenderer | null = null;
+  private readonly abort = new AbortController();
+  constructor(
+    private readonly screen: HTMLElement,
+    private readonly host: HTMLElement,
+  ) {}
+  start(state: GameState) {
+    if (this.timer || this.stopped) return;
+    // Let the menu paint and become usable before the artwork is rendered.
+    this.timer = window.setTimeout(() => void this.build(state), 60);
+  }
+  private async build(state: GameState) {
+    if (this.stopped) return;
+    try {
+      const game = new Game(state);
+      const renderer = new WorldRenderer(game, this.host, true);
+      await renderer.init();
+      if (this.stopped) {
+        renderer.destroy({ keepAtlas: true });
+        return;
+      }
+      this.renderer = renderer;
+      const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      let base = { x: renderer.world.x, y: renderer.world.y };
+      window.addEventListener(
+        'resize',
+        () => {
+          renderer.camera.reset();
+          base = { x: renderer.world.x, y: renderer.world.y };
+        },
+        { signal: this.abort.signal },
+      );
+      this.loop = new GameLoop(game, (interpolation, now) => {
+        if (!still)
+          renderer.world.position.set(
+            base.x + Math.sin(now * 0.00006) * 140,
+            base.y + Math.sin(now * 0.000045) * 60,
+          );
+        renderer.render(interpolation, now);
       });
-      panel.hidden = false;
-      show(0);
-      if (!matchMedia('(prefers-reduced-motion: reduce)').matches)
-        showcaseTimer = window.setInterval(() => show(index + 1), 3400);
-    });
-  }, 60);
+      this.loop.start();
+      this.screen.classList.add('world-ready');
+    } catch {
+      // Without WebGL the menu simply stands on its meadow background.
+      this.screen.classList.add('world-ready');
+    }
+  }
+  stop() {
+    this.stopped = true;
+    clearTimeout(this.timer);
+    this.abort.abort();
+    this.loop?.stop();
+    this.renderer?.destroy({ keepAtlas: true });
+    this.renderer = null;
+  }
 }
 
 export interface WelcomeChoice {
@@ -78,47 +84,40 @@ export interface WelcomeChoice {
   restored: boolean;
 }
 
-/** No renderer, simulation, or autosave starts until the player enters their kingdom. */
+/** Nothing is saved until the player enters a kingdom; the living backdrop is a discarded copy. */
 export async function showWelcome(
   root: HTMLElement,
   persistence: Persistence,
   audio: AudioController,
 ): Promise<WelcomeChoice> {
   root.innerHTML = `<main class="welcome-screen" aria-labelledby="welcome-title">
-    <div class="welcome-sky" aria-hidden="true">
-      <img class="welcome-backdrop" src="/art/angkor-cartoon.jpg" alt="" fetchpriority="high" />
-      <span class="welcome-cloud one"></span><span class="welcome-cloud two"></span><span class="welcome-cloud three"></span>
-      <div class="welcome-shade"></div>
-      <div class="welcome-petals">${Array.from({ length: 14 }, (_, i) => `<span style="--i:${i}"></span>`).join('')}</div>
-    </div>
-    <header class="welcome-header">
-      <span class="welcome-brand"><span class="royal-mark">${angkorEmblem()}</span><span>ANGKOR<span class="brand-subtitle">ARCHITECT · <span lang="km">អង្គរ</span></span></span></span>
-      <span class="welcome-edition">${icon('sparkle')} New: statues &amp; wonders</span>
-    </header>
-    <div class="welcome-body">
-      <section class="welcome-menu">
-        <h1 id="welcome-title" class="welcome-logo"><span class="logo-khmer" lang="km" aria-hidden="true">ស្ថាបត្យករ​អង្គរ</span><span class="logo-main">Angkor</span><span class="logo-ribbon"><span>Architect</span></span></h1>
-        <p class="welcome-intro">Tame the monsoon. Raise a temple city.<br>Build a legend that lasts a thousand years.</p>
-        <nav class="welcome-actions" aria-label="Main menu">
-          <button class="welcome-play" data-menu="play" disabled><span class="menu-button-icon">${icon('play')}</span><span><strong>Play</strong><small>Start a new kingdom</small></span><span class="play-shine" aria-hidden="true"></span></button>
-          <button class="welcome-continue" data-menu="continue" aria-describedby="welcome-save" disabled><span class="menu-button-icon">${icon('arrow-counter-clockwise')}</span><span><strong>Continue</strong><small id="welcome-save" role="status">Finding your kingdom…</small></span>${icon('arrow-right')}</button>
-          <div class="welcome-round">
-            <button data-menu="slots" disabled><span class="round-icon">${icon('crown-simple')}</span>Kingdoms</button>
-            <button data-menu="settings"><span class="round-icon">${icon('gear-six')}</span>Settings</button>
-            <button data-menu="guide"><span class="round-icon">${icon('book-open-text')}</span>How to play</button>
-          </div>
-        </nav>
-      </section>
-      <aside class="welcome-showcase" aria-label="Royal showcase" hidden>
-        <div class="showcase-head"><span>${icon('sparkle')} Royal showcase</span><small>Place them in your kingdom</small></div>
-        <div class="showcase-stage"><span class="showcase-rays" aria-hidden="true"></span><img alt="" /></div>
-        <div class="showcase-info" aria-live="polite"><span class="showcase-tag"></span><strong></strong><small></small><span class="appeal-badge"></span></div>
-        <div class="showcase-dots"></div>
-      </aside>
-    </div>
-    <footer class="welcome-footer"><span><span class="live-dot"></span> A world of your own. Play at your own pace.</span><span>${icon('floppy-disk')} Saved on this device <span class="footer-version">EARLY ACCESS · v0.2</span></span></footer>
+    <div class="welcome-world" aria-hidden="true"></div>
+    <div class="welcome-shade" aria-hidden="true"></div>
+    <section class="welcome-center">
+      <header class="welcome-logo">
+        <span class="royal-mark">${angkorEmblem()}</span>
+        <span class="welcome-eyebrow">The Khmer Empire</span>
+        <h1 id="welcome-title">Angkor Architect</h1>
+        <small lang="km">ស្ថាបត្យករ​អង្គរ</small>
+        <p class="welcome-tagline">Tame the monsoon. Raise a temple city.</p>
+      </header>
+      <nav class="welcome-card" aria-label="Main menu">
+        <button class="welcome-play" data-menu="play" disabled>${icon('play')}<span>Play</span></button>
+        <button class="welcome-continue" data-menu="continue" aria-describedby="welcome-save" disabled><span><strong>Continue</strong><small id="welcome-save" role="status">Finding your kingdom…</small></span>${icon('arrow-right')}</button>
+        <div class="welcome-tools">
+          <button class="welcome-tool" data-menu="slots" disabled>${icon('crown-simple')}<span>Kingdoms</span></button>
+          <button class="welcome-tool" data-menu="settings">${icon('gear-six')}<span>Settings</span></button>
+          <button class="welcome-tool" data-menu="guide">${icon('book-open-text')}<span>Guide</span></button>
+        </div>
+      </nav>
+    </section>
+    <footer class="welcome-footer">${icon('floppy-disk')} Saved on this device · Early access v0.2</footer>
+    <p class="welcome-loading" aria-hidden="true"><span></span>Preparing your kingdom…</p>
   </main><dialog class="welcome-dialog" aria-labelledby="welcome-dialog-title"></dialog>`;
-  startShowcase(root);
+  const screen = root.querySelector<HTMLElement>('.welcome-screen')!;
+  const backdrop = new MenuBackdrop(screen, root.querySelector<HTMLElement>('.welcome-world')!);
+  audio.enterMenu();
+  backdrop.start(showcaseKingdom());
 
   const dialog = root.querySelector<HTMLDialogElement>('dialog')!;
   const play = root.querySelector<HTMLButtonElement>('[data-menu="play"]')!;
@@ -165,7 +164,7 @@ export async function showWelcome(
   const choice = new Promise<WelcomeChoice>((resolve) => {
     const enter = (state: GameState, restored: boolean) => {
       abort.abort();
-      stopShowcase();
+      backdrop.stop();
       dialog.close();
       resolve({ state, restored });
     };

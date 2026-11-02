@@ -43,7 +43,7 @@ export function placementAdvice(state: GameState, kind: BuildingKind, point: Poi
       amount === 0,
     );
   }
-  if (['paddy', 'quarry', 'lateritepit', 'lumber'].includes(kind)) {
+  if (['paddy', 'quarry', 'lateritepit', 'lumber', 'fishery'].includes(kind)) {
     const delivery = planDelivery(projected, site);
     if (delivery.issue) {
       const issue = ISSUE_TEXT[delivery.issue];

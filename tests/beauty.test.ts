@@ -37,7 +37,15 @@ function add(s: GameState, kind: Building['kind'], x: number, y: number) {
 
 describe('decorations', () => {
   it('are cheap, unstaffed, and appealing', () => {
-    expect(DECOR_KINDS).toEqual(['garden', 'palmgrove', 'shrine', 'naga', 'lotuspond', 'market']);
+    expect(DECOR_KINDS).toEqual([
+      'garden',
+      'palmgrove',
+      'shrine',
+      'naga',
+      'lotuspond',
+      'market',
+      'lotusraft',
+    ]);
     for (const kind of DECOR_KINDS) {
       expect(BUILDINGS[kind].workers).toBe(0);
       expect(BUILDINGS[kind].appeal).toBeGreaterThan(0);
@@ -55,8 +63,9 @@ describe('decorations', () => {
       'pavilion',
       'elephant',
       'facetower',
+      'royalbarge',
     ]);
-    expect(APPEAL_KINDS).toHaveLength(14);
+    expect(APPEAL_KINDS).toHaveLength(16);
     for (const kind of WONDER_KINDS) {
       expect(BUILDINGS[kind].workers).toBe(0);
       expect(BUILDINGS[kind].appeal).toBeGreaterThan(0);

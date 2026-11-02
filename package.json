@@ -13,10 +13,8 @@
     "format:check": "prettier --check src tests build public/manifest.webmanifest *.json *.ts index.html README.md"
   },
   "dependencies": {
-    "@fontsource/cormorant-garamond": "^5.2.8",
-    "@fontsource/dm-sans": "^5.2.8",
-    "@fontsource/fredoka": "^5.3.0",
-    "@fontsource/moul": "^5.3.0",
+    "@fontsource/bayon": "^5.3.0",
+    "@fontsource/ubuntu": "^5.3.0",
     "@phosphor-icons/web": "^2.1.2",
     "pixi.js": "^8.22.0",
     "three": "^0.186.1"

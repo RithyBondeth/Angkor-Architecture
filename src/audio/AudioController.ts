@@ -1,6 +1,7 @@
 import type { Game } from '../core/Game';
 import { SeasonManager } from '../core/SeasonManager';
 import { AudioEngine } from './AudioEngine';
+import type { Cue } from './AudioEngine';
 import { AUDIO_DEFAULTS, readAudioPreferences, saveAudioPreferences } from './preferences';
 import type { AudioPreferences, VolumeChannel } from './preferences';
 import { escapeHtml, icon } from '../ui/icons';
@@ -8,11 +9,29 @@ import './audio.css';
 
 const channels: readonly [VolumeChannel, string][] = [
   ['master', 'Master volume'],
+  ['music', 'Music'],
   ['effects', 'Sound effects'],
-  ['ambience', 'Water ambience'],
+  ['ambience', 'Nature & water'],
 ];
 export function audioSettings(preferences: AudioPreferences, status: string): string {
-  return `<fieldset class="audio-settings"><legend>Sound & atmosphere</legend>${channels.map(([key, label]) => `<label class="audio-volume" for="audio-${key}"><span>${label}<output for="audio-${key}" data-audio-output="${key}">${Math.round(preferences[key] * 100)}%</output></span><input id="audio-${key}" type="range" min="0" max="100" step="1" value="${Math.round(preferences[key] * 100)}" aria-valuetext="${Math.round(preferences[key] * 100)}%" data-audio-volume="${key}"/></label>`).join('')}<div class="settings-buttons"><button class="secondary-button" data-audio-action="mute" aria-label="${preferences.muted ? 'Unmute sound' : 'Mute sound'}" aria-pressed="${preferences.muted}">${icon(preferences.muted ? 'speaker-slash' : 'speaker-high')}${preferences.muted ? 'Unmute sound' : 'Mute sound'}</button><button class="secondary-button" data-audio-action="test">${icon('music-note')}Test effects</button></div><p data-audio-status role="status">${escapeHtml(status)}</p><p>Separate volumes for building and delivery sounds, and water ambience. These preferences stay on this device.</p></fieldset>`;
+  return `<fieldset class="audio-settings"><legend>Sound & atmosphere</legend>${channels.map(([key, label]) => `<label class="audio-volume" for="audio-${key}"><span>${label}<output for="audio-${key}" data-audio-output="${key}">${Math.round(preferences[key] * 100)}%</output></span><input id="audio-${key}" type="range" min="0" max="100" step="1" value="${Math.round(preferences[key] * 100)}" aria-valuetext="${Math.round(preferences[key] * 100)}%" data-audio-volume="${key}"/></label>`).join('')}<div class="settings-buttons"><button class="secondary-button" data-audio-action="mute" aria-label="${preferences.muted ? 'Unmute sound' : 'Mute sound'}" aria-pressed="${preferences.muted}">${icon(preferences.muted ? 'speaker-slash' : 'speaker-high')}${preferences.muted ? 'Unmute sound' : 'Mute sound'}</button><button class="secondary-button" data-audio-action="test">${icon('music-note')}Test effects</button></div><p data-audio-status role="status">${escapeHtml(status)}</p><p>Separate volumes for the pinpeat-inspired music, building and interface sounds, and the river, birds, and weather. These preferences stay on this device.</p></fieldset>`;
+}
+
+/** Picks a gentle interface sound from what the button does. */
+function uiCue(target: HTMLElement): Cue {
+  const action = target.dataset.action ?? '';
+  const menu = target.dataset.menu ?? '';
+  if (menu === 'play' || menu === 'continue' || menu === 'start-scenario' || menu === 'open-slot')
+    return 'start';
+  if (action === 'build') return 'select';
+  if (
+    ['panel', 'toggle-build', 'guide', 'settings'].includes(action) ||
+    ['settings', 'guide', 'slots'].includes(menu)
+  )
+    return 'open';
+  if (['close-inspector', 'close-dialog', 'cancel-build'].includes(action) || menu === 'close')
+    return 'close';
+  return 'click';
 }
 
 /** Owns device preferences and browser lifecycle; audio failures cannot interrupt the game. */
@@ -77,6 +96,18 @@ export class AudioController {
     root.addEventListener(
       'click',
       (event) => {
+        if (!event.isTrusted) return;
+        const target = (event.target as Element).closest<HTMLElement>(
+          'button, summary, [role="tab"]',
+        );
+        if (!target || (target as HTMLButtonElement).disabled) return;
+        this.safe(() => this.engine.cue(uiCue(target)));
+      },
+      { ...options, capture: true },
+    );
+    root.addEventListener(
+      'click',
+      (event) => {
         const button = (event.target as Element).closest<HTMLElement>('[data-audio-action]');
         if (!button) return;
         if (button.dataset.audioAction === 'mute') {
@@ -105,10 +136,26 @@ export class AudioController {
         : this.engine.status,
     );
   }
+  /** The main menu plays its own calm theme over birdsong. */
+  enterMenu(): void {
+    this.safe(() => this.engine.setScene('menu'));
+  }
+  /** One-off sounds the interface asks for: refusals, demolition, upgrades. */
+  cue(name: Cue): void {
+    this.safe(() => this.engine.cue(name));
+  }
   attach(game: Game): void {
     this.detach?.();
+    let wet = SeasonManager.at(game.state.day).wet;
+    const mood = () => ({
+      wet: SeasonManager.at(game.state.day).wet,
+      busy: game.state.buildings.some((b) => b.construction && !b.construction.paused),
+      paused: game.state.speed === 0,
+    });
     this.safe(() => {
-      this.engine.setWet(SeasonManager.at(game.state.day).wet);
+      this.engine.setWet(wet);
+      this.engine.setMood(mood());
+      this.engine.setScene('game');
       this.engine.setPlaying(true);
     });
     const events = game.onEvent((event) =>
@@ -116,10 +163,19 @@ export class AudioController {
         if (event.type === 'placement') this.engine.playPlacement(event.kind);
         else if (event.type === 'delivery') this.engine.playDelivery(event.mode);
         else if (event.type === 'completed') this.engine.playCompletion();
+        else if (event.type === 'milestone') this.engine.cue('milestone');
       }),
     );
     const world = game.subscribe(() =>
-      this.safe(() => this.engine.setWet(SeasonManager.at(game.state.day).wet)),
+      this.safe(() => {
+        const now = mood();
+        if (now.wet !== wet) {
+          wet = now.wet;
+          this.engine.cue('season');
+        }
+        this.engine.setWet(now.wet);
+        this.engine.setMood(now);
+      }),
     );
     this.detach = () => {
       events();

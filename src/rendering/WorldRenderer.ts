@@ -18,8 +18,9 @@ import { constructionSite } from './ConstructionSite';
 import { floodUnsafe } from '../simulation/survivalRules';
 import type { Game } from '../core/Game';
 import { Camera } from './Camera';
-import { TextureAtlas, TILE_FRAME } from './TextureAtlas';
+import { sharedAtlas, TILE_FRAME } from './TextureAtlas';
 import { Effects } from './Effects';
+import { WaterLife } from './WaterLife';
 import { TREE_VARIANTS } from './natureArt';
 import { toGrid, toScreen } from './isometric';
 
@@ -35,7 +36,7 @@ const THEME_COLORS: Partial<Record<BuildingKind, number[]>> = {
 
 export class WorldRenderer {
   readonly app = new Application();
-  readonly atlas = new TextureAtlas();
+  readonly atlas = sharedAtlas();
   readonly world = new Container();
   camera!: Camera;
   private readonly ground = new Container();
@@ -74,6 +75,7 @@ export class WorldRenderer {
   private initialized = false;
   private nextAmbient = 0;
   private nextEmber = 0;
+  private waterLife: WaterLife | null = null;
   onRoutePreview: (preview: RoutePreview | null) => void = () => {};
   onPreview: (message: string, ok: boolean, advice: SiteAdvice[]) => void = () => {};
   onResource: (message: string) => void = () => {};
@@ -86,6 +88,8 @@ export class WorldRenderer {
   constructor(
     private readonly game: Game,
     private readonly host: HTMLElement,
+    /** Scenery mode for the main menu: no warning labels over the city. */
+    private readonly scenery = false,
   ) {}
   async init() {
     await this.app.init({
@@ -204,6 +208,10 @@ export class WorldRenderer {
     this.unsubscribeEvents = this.game.onEvent((event) => {
       if (event.type === 'completed') this.celebrate(event.id);
     });
+    this.waterLife = new WaterLife(this.atlas, this.objects, this.reducedMotion, (x, y) => {
+      this.effects.ripple(x, y, 0xd9f6f2, 0.35);
+      this.effects.burst(x, y - 4, [0xffffff, 0xbfe9ef, 0x8fd4e0], 6, 14);
+    });
     this.sync();
     this.initialized = true;
   }
@@ -212,7 +220,7 @@ export class WorldRenderer {
     const label = new Text({
       text,
       style: {
-        fontFamily: 'Fredoka',
+        fontFamily: 'Ubuntu, Bayon, sans-serif',
         fontSize: 11,
         fontWeight: '600',
         letterSpacing: 1.5,
@@ -270,6 +278,7 @@ export class WorldRenderer {
       }
     }
     this.waterTiles = wet;
+    this.waterLife?.refresh(state);
     for (const [id, sprite] of this.buildingSprites)
       if (!state.buildings.some((b) => b.id === id)) {
         sprite.destroy();
@@ -324,6 +333,7 @@ export class WorldRenderer {
         site.workers.forEach((worker, i) => (worker.visible = !p.paused && i < p.builders));
       }
       if (
+        !this.scenery &&
         !b.construction &&
         (b.condition < 100 || (b.crop?.stress ?? 0) >= 30 || !!b.deliveryIssue)
       ) {
@@ -332,7 +342,7 @@ export class WorldRenderer {
           label = new Text({
             text: '',
             style: {
-              fontFamily: 'Fredoka',
+              fontFamily: 'Ubuntu, Bayon, sans-serif',
               fontSize: 10,
               fontWeight: '600',
               fill: 0xfff2df,
@@ -441,6 +451,7 @@ export class WorldRenderer {
       }
     }
     this.animate(elapsed);
+    this.waterLife?.update(elapsed);
     for (const c of this.game.state.couriers) {
       const sprite = this.courierSprites.get(c.id);
       if (!sprite) continue;
@@ -856,14 +867,16 @@ export class WorldRenderer {
       this.routes.stroke({ color: c.kind === 'barge' ? 0xeff5da : 0xdac080, width: 3, alpha: 0.7 });
     }
   }
-  destroy() {
+  /** `keepAtlas` leaves the shared artwork for the next renderer (menu → kingdom). */
+  destroy({ keepAtlas = false } = {}) {
     this.abort.abort();
     this.unsubscribe?.();
     this.unsubscribeEvents?.();
     this.resizeObserver.disconnect();
     this.camera.destroy();
     this.effects.destroy();
+    this.waterLife?.destroy();
     this.app.destroy(true, { children: true });
-    this.atlas.destroy();
+    if (!keepAtlas) this.atlas.destroy();
   }
 }
