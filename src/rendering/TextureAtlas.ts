@@ -1,116 +1,13 @@
 import { Rectangle, Texture } from 'pixi.js';
 import type { BuildingKind, Terrain } from '../core/types';
-import { random } from '../core/world';
+import { BUILDINGS } from '../data/buildings';
+import { box, ellipse, line, polygon } from './draw';
+import type { Ctx, Vertex } from './draw';
+import { decor, dwelling } from './decorArt';
+import { lotusFlower, tile, tree, TREE_VARIANTS } from './natureArt';
 
-type Ctx = CanvasRenderingContext2D;
-type Vertex = [number, number];
-export function polygon(c: Ctx, points: Vertex[], fill: string, stroke?: string) {
-  c.beginPath();
-  points.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y)));
-  c.closePath();
-  c.fillStyle = fill;
-  c.fill();
-  if (stroke) {
-    c.strokeStyle = stroke;
-    c.lineWidth = 0.7;
-    c.stroke();
-  }
-}
-function box(
-  c: Ctx,
-  x: number,
-  y: number,
-  w: number,
-  d: number,
-  h: number,
-  top = '#d5c5a2',
-  left = '#b4a17e',
-  right = '#8e8369',
-) {
-  polygon(
-    c,
-    [
-      [x - w, y - h],
-      [x, y + d - h],
-      [x, y + d],
-      [x - w, y],
-    ],
-    left,
-  );
-  polygon(
-    c,
-    [
-      [x, y + d - h],
-      [x + w, y - h],
-      [x + w, y],
-      [x, y + d],
-    ],
-    right,
-  );
-  polygon(
-    c,
-    [
-      [x, y - d - h],
-      [x + w, y - h],
-      [x, y + d - h],
-      [x - w, y - h],
-    ],
-    top,
-  );
-  // One consistent sunlight direction gives the procedural architecture more depth.
-  c.save();
-  c.beginPath();
-  c.moveTo(x - w, y - h);
-  c.lineTo(x, y + d - h);
-  c.lineTo(x, y + d);
-  c.lineTo(x - w, y);
-  c.closePath();
-  c.clip();
-  const sunlight = c.createLinearGradient(x - w, y - h, x, y + d);
-  sunlight.addColorStop(0, '#ffe3a42b');
-  sunlight.addColorStop(1, '#283b2b12');
-  c.fillStyle = sunlight;
-  c.fillRect(x - w, y - h, w, d + h);
-  if (w > 45) {
-    for (let row = 5; row < h; row += 6) {
-      line(
-        c,
-        [
-          [x - w, y - h + row],
-          [x, y + d - h + row],
-        ],
-        '#6e62482b',
-        0.7,
-      );
-      for (let col = row % 12 ? 8 : 0; col < w; col += 15) {
-        const yy = y - h + row + (col / w) * d;
-        line(
-          c,
-          [
-            [x - w + col, yy],
-            [x - w + col, yy - 5],
-          ],
-          '#6e624826',
-          0.7,
-        );
-      }
-    }
-  }
-  c.restore();
-}
-function ellipse(c: Ctx, x: number, y: number, rx: number, ry: number, fill: string) {
-  c.beginPath();
-  c.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
-  c.fillStyle = fill;
-  c.fill();
-}
-function line(c: Ctx, points: Vertex[], color: string, width = 1) {
-  c.beginPath();
-  points.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y)));
-  c.strokeStyle = color;
-  c.lineWidth = width;
-  c.stroke();
-}
+const ATLAS_WIDTH = 2048;
+const ATLAS_HEIGHT = 2560;
 function tower(c: Ctx, x: number, y: number, scale = 1) {
   c.save();
   c.translate(x, y);
@@ -208,115 +105,6 @@ function tower(c: Ctx, x: number, y: number, scale = 1) {
   );
   c.restore();
 }
-function dwelling(c: Ctx, x: number, y: number, scale = 1, roof = '#cd784f') {
-  c.save();
-  c.translate(x, y);
-  c.scale(scale, scale);
-  for (const dx of [-24, 0, 24]) {
-    line(
-      c,
-      [
-        [dx, 0],
-        [dx, 22],
-      ],
-      '#776c50',
-      4,
-    );
-  }
-  box(c, 0, 0, 30, 15, 6, '#b5a179', '#867d60', '#726c54');
-  box(c, 0, -6, 26, 13, 28, '#cbb58b', '#c5ac7b', '#a59168');
-  for (let i = 0; i < 4; i++)
-    line(
-      c,
-      [
-        [-26, -10 - i * 6],
-        [0, 3 - i * 6],
-        [26, -10 - i * 6],
-      ],
-      '#8e7958',
-      0.6,
-    );
-  polygon(
-    c,
-    [
-      [-36, -35],
-      [-5, -62],
-      [34, -43],
-      [4, -19],
-    ],
-    roof,
-  );
-  polygon(
-    c,
-    [
-      [34, -43],
-      [4, -19],
-      [36, -23],
-      [39, -29],
-    ],
-    '#a65840',
-  );
-  polygon(
-    c,
-    [
-      [-36, -35],
-      [-5, -62],
-      [-9, -35],
-    ],
-    '#e6a16a',
-  );
-  line(
-    c,
-    [
-      [-5, -62],
-      [34, -43],
-    ],
-    '#ffcd8a',
-    2,
-  );
-  for (let i = 0; i < 7; i++)
-    line(
-      c,
-      [
-        [-30 + i * 5, -36 - i * 3.4],
-        [7 + i * 4.1, -21 - i * 3.2],
-      ],
-      '#f6be80',
-      0.7,
-    );
-  polygon(
-    c,
-    [
-      [-5, -27],
-      [4, -22],
-      [4, -7],
-      [-5, -12],
-    ],
-    '#514f3e',
-  );
-  line(
-    c,
-    [
-      [4, 0],
-      [18, 12],
-      [18, 25],
-    ],
-    '#b4a483',
-    3,
-  );
-  for (let i = 0; i < 4; i++)
-    line(
-      c,
-      [
-        [5 + i * 4, 2 + i * 4],
-        [13 + i * 4, 2 + i * 4],
-      ],
-      '#ded0a4',
-      1.5,
-    );
-  c.restore();
-}
-
 /** Every scene sprite shares one GPU texture. Artwork is generated once at startup. */
 export class TextureAtlas {
   private readonly canvas = document.createElement('canvas');
@@ -329,9 +117,9 @@ export class TextureAtlas {
   private rowHeight = 0;
   readonly texture: Texture;
   constructor() {
-    this.canvas.width = 2048;
-    this.canvas.height = 2048;
-    this.context = this.canvas.getContext('2d')!;
+    this.canvas.width = ATLAS_WIDTH;
+    this.canvas.height = ATLAS_HEIGHT;
+    this.context = this.canvas.getContext('2d', { willReadFrequently: true })!;
     for (const terrain of [
       'grass',
       'forest',
@@ -341,29 +129,13 @@ export class TextureAtlas {
       'reservoir',
       'road',
       'bridge',
-    ] as Terrain[])
-      for (let v = 0; v < 5; v++)
-        this.add(`${terrain}-${v}`, 80, 56, (c) => this.tile(c, terrain, v));
-    for (let v = 0; v < 5; v++) this.add(`tree-${v}`, 128, 160, (c) => this.tree(c, v));
-    for (const kind of [
-      'baray',
-      'canal',
-      'moat',
-      'paddy',
-      'house',
-      'quarry',
-      'temple',
-      'lumber',
-      'dock',
-      'gate',
-      'road',
-      'bridge',
-      'granary',
-      'workshop',
-      'warehouse',
-      'lateritepit',
-    ] as BuildingKind[])
+      'flood',
+    ] as (Terrain | 'flood')[])
+      for (let v = 0; v < 5; v++) this.add(`${terrain}-${v}`, 80, 56, (c) => tile(c, terrain, v));
+    for (let v = 0; v < TREE_VARIANTS; v++) this.add(`tree-${v}`, 128, 160, (c) => tree(c, v));
+    for (const kind of Object.keys(BUILDINGS) as BuildingKind[])
       this.add(kind, 384, 320, (c) => this.building(c, kind));
+    this.add('house-b', 384, 320, (c) => this.building(c, 'house', 3, true));
     this.add('temple-towers', 384, 320, (c) => this.building(c, 'temple', 2));
     this.add('temple-foundation', 384, 320, (c) => this.building(c, 'temple', 1));
     this.add('worker', 32, 48, (c) => {
@@ -460,227 +232,126 @@ export class TextureAtlas {
   thumbnail(key: string) {
     return this.thumbnails.get(key) ?? '';
   }
+  /** Crop the drawn artwork (not the empty frame) so small and large pieces read alike. */
+  private thumbnailOf(width: number, height: number) {
+    const pixels = this.context.getImageData(this.x, this.y, width, height).data;
+    let left = width,
+      top = height,
+      right = 0,
+      bottom = 0;
+    for (let y = 0; y < height; y++)
+      for (let x = 0; x < width; x++)
+        if (pixels[(y * width + x) * 4 + 3]! > 24) {
+          left = Math.min(left, x);
+          right = Math.max(right, x);
+          top = Math.min(top, y);
+          bottom = Math.max(bottom, y);
+        }
+    const thumb = document.createElement('canvas');
+    thumb.width = 192;
+    thumb.height = 160;
+    if (right <= left) return thumb.toDataURL('image/png');
+    const pad = 6;
+    const w = right - left + 1 + pad * 2;
+    const h = bottom - top + 1 + pad * 2;
+    const scale = Math.min(192 / w, 160 / h, 2.4);
+    thumb
+      .getContext('2d')!
+      .drawImage(
+        this.canvas,
+        this.x + left - pad,
+        this.y + top - pad,
+        w,
+        h,
+        (192 - w * scale) / 2,
+        160 - h * scale,
+        w * scale,
+        h * scale,
+      );
+    return thumb.toDataURL('image/png');
+  }
   private add(key: string, width: number, height: number, draw: (c: Ctx) => void) {
-    if (this.x + width > 2048) {
+    if (this.x + width > ATLAS_WIDTH) {
       this.x = 0;
       this.y += this.rowHeight + 2;
       this.rowHeight = 0;
     }
-    if (this.y + height > 2048) throw new Error('Texture atlas overflow');
+    if (this.y + height > ATLAS_HEIGHT) throw new Error('Texture atlas overflow');
     this.context.save();
     this.context.translate(this.x, this.y);
+    // Keep each painter inside its own frame so neighbours never bleed into a sprite.
+    this.context.beginPath();
+    this.context.rect(0, 0, width, height);
+    this.context.clip();
     draw(this.context);
     this.context.restore();
     this.frames.set(key, new Rectangle(this.x, this.y, width, height));
-    if (width === 384) {
-      const thumb = document.createElement('canvas');
-      thumb.width = 192;
-      thumb.height = 160;
-      if (key === 'bridge' || key === 'road')
-        thumb
-          .getContext('2d')!
-          .drawImage(this.canvas, this.x + 140, this.y + 195, 104, 100, 0, 0, 192, 160);
-      else
-        thumb
-          .getContext('2d')!
-          .drawImage(this.canvas, this.x, this.y, width, height, 0, 0, 192, 160);
-      this.thumbnails.set(key, thumb.toDataURL('image/png'));
-    }
+    if (width === 384 && key in BUILDINGS)
+      this.thumbnails.set(key, this.thumbnailOf(width, height));
     this.x += width + 2;
     this.rowHeight = Math.max(this.rowHeight, height);
   }
-  private tile(c: Ctx, terrain: Terrain, variant: number) {
-    const rand = random(variant + 41);
-    const grass = ['#a1c978', '#a5ce7a', '#9bc572', '#a9d17c', '#a0cb75'][variant]!;
-    const water = ['#48abb5', '#50b1ba', '#4caeb8', '#55b7bf', '#4aafb6'][variant]!;
-    const wet = ['water', 'moat', 'canal', 'reservoir', 'bridge'].includes(terrain);
-    const top = wet
-      ? water
-      : terrain === 'road'
-        ? '#e3c18a'
-        : terrain === 'forest'
-          ? '#88b562'
-          : grass;
-    polygon(
-      c,
-      [
-        [4, 18],
-        [40, 36],
-        [40, 43],
-        [4, 25],
-      ],
-      wet ? '#378b97' : '#7b9f55',
-    );
-    polygon(
-      c,
-      [
-        [40, 36],
-        [76, 18],
-        [76, 25],
-        [40, 43],
-      ],
-      wet ? '#2f8192' : '#688e4c',
-    );
-    polygon(
-      c,
-      [
-        [40, 0],
-        [76, 18],
-        [40, 36],
-        [4, 18],
-      ],
-      top,
-      undefined,
-    );
+  private building(c: Ctx, kind: BuildingKind, level = 3, alternate = false) {
     c.save();
-    c.beginPath();
-    c.moveTo(40, 0);
-    c.lineTo(76, 18);
-    c.lineTo(40, 36);
-    c.lineTo(4, 18);
-    c.closePath();
-    c.clip();
-    const light = c.createLinearGradient(8, 0, 65, 36);
-    light.addColorStop(0, wet ? '#c1e2b512' : '#e6d7a319');
-    light.addColorStop(1, '#173d2410');
-    c.fillStyle = light;
-    c.fillRect(0, 0, 80, 40);
-    for (let i = 0; i < 85; i++) {
-      c.fillStyle = i % 2 ? '#e1dcb011' : '#1834210c';
-      c.fillRect(rand() * 80, rand() * 36, 1 + rand() * 2, 0.6);
-    }
-    c.restore();
-    if (wet) {
-      for (let i = 0; i < 4; i++) {
-        const x = 22 + rand() * 35;
-        const y = 10 + rand() * 14;
+    c.translate(192, 252);
+    if (BUILDINGS[kind].category === 'decor') decor(c, kind);
+    else if (kind === 'house' && alternate) {
+      box(c, 0, 8, 64, 32, 3, '#bbd28a', '#95b76c', '#80a362');
+      for (let i = 0; i < 3; i++) {
         line(
           c,
           [
-            [x, y],
-            [x + 8, y - 4],
+            [-52 + i * 4, 6 - i * 2],
+            [-52 + i * 4, -22 - i * 2],
           ],
-          '#b4e6da',
-          0.7,
-        );
-      }
-      if (terrain === 'canal') {
-        line(
-          c,
-          [
-            [4, 18],
-            [40, 0],
-            [76, 18],
-          ],
-          '#c7c39e',
+          '#6b8a3d',
           2,
         );
-        line(
+        polygon(
           c,
           [
-            [4, 18],
-            [40, 36],
-            [76, 18],
+            [-52 + i * 4, -22 - i * 2],
+            [-66 + i * 4, -14 - i * 2],
+            [-56 + i * 4, -12 - i * 2],
           ],
-          '#9caa80',
-          1.5,
+          '#7cc25a',
+          '#2f6a33',
         );
-      }
-    } else if (terrain === 'road') {
-      for (let i = 0; i < 6; i++)
-        ellipse(c, 20 + rand() * 40, 12 + rand() * 12, 1.5, 0.7, '#a7a181');
-    } else {
-      for (let i = 0; i < 9; i++) {
-        const x = 18 + rand() * 40;
-        const y = 12 + rand() * 12;
-        line(
+        polygon(
           c,
           [
-            [x, y],
-            [x - 1, y - 2],
+            [-52 + i * 4, -22 - i * 2],
+            [-38 + i * 4, -16 - i * 2],
+            [-48 + i * 4, -12 - i * 2],
           ],
-          variant % 2 ? '#82af59' : '#c0df8d',
-          0.8,
+          '#a3d870',
+          '#2f6a33',
         );
       }
-    }
-  }
-  private tree(c: Ctx, variant: number) {
-    const rand = random(variant + 19);
-    const palm = variant === 3;
-    ellipse(c, 77, 143, 46, 13, '#173c2740');
-    if (palm) {
       line(
         c,
         [
-          [65, 140],
-          [62, 92],
-          [74, 45],
+          [-40, 20],
+          [-8, 36],
         ],
-        '#bd9b62',
-        7,
+        '#7c613d',
+        1,
       );
-      for (let i = 0; i < 8; i++) {
-        const angle = (i * Math.PI) / 4;
-        const x = 74 + Math.cos(angle) * 49;
-        const y = 45 + Math.sin(angle) * 20;
-        c.beginPath();
-        c.moveTo(74, 45);
-        c.quadraticCurveTo(x, y - 16, x, y + 17);
-        c.quadraticCurveTo((74 + x) / 2, y + 1, 74, 45);
-        c.fillStyle = i % 2 ? '#3f9457' : '#8ec451';
-        c.fill();
-      }
-    } else {
-      polygon(
-        c,
-        [
-          [61, 144],
-          [69, 144],
-          [67, 73],
-          [62, 73],
-        ],
-        '#b8935f',
-      );
-      const clusters = Array.from({ length: 22 }, () => ({
-        x: 32 + rand() * 64,
-        y: 29 + rand() * 73,
-        r: 13 + rand() * 12,
-      })).sort((a, b) => a.y - b.y);
-      for (const { x, y, r } of clusters) {
-        const canopy: Vertex[] = [];
-        for (let i = 0; i < 14; i++) {
-          const angle = (i / 14) * Math.PI * 2;
-          const radius = r * (0.8 + rand() * 0.3);
-          canopy.push([x + Math.cos(angle) * radius, y + Math.sin(angle) * radius * 0.8]);
-        }
-        const tones = c.createRadialGradient(x - 6, y - 6, 1, x, y, r);
-        tones.addColorStop(0, '#b0d96a');
-        tones.addColorStop(0.5, '#71ad4c');
-        tones.addColorStop(1, '#3b804b');
-        polygon(c, canopy, '#559947');
-        c.save();
-        c.clip();
-        c.fillStyle = tones;
-        c.fillRect(x - r * 1.2, y - r, r * 2.4, r * 2);
-        for (let i = 0; i < 16; i++) {
-          ellipse(
-            c,
-            x - r + rand() * r * 2,
-            y - r + rand() * r * 2,
-            1.5 + rand() * 3,
-            1.2,
-            i % 2 ? '#d0c77d35' : '#163c2c30',
-          );
-        }
-        c.restore();
-      }
-    }
-  }
-  private building(c: Ctx, kind: BuildingKind, level = 3) {
-    c.save();
-    c.translate(192, 252);
-    if (kind === 'temple') {
+      for (let i = 0; i < 4; i++)
+        polygon(
+          c,
+          [
+            [-36 + i * 8, 22 + i * 4],
+            [-31 + i * 8, 24.5 + i * 4],
+            [-31 + i * 8, 31 + i * 4],
+            [-36 + i * 8, 28.5 + i * 4],
+          ],
+          ['#e2553f', '#3f8cc0', '#f2c13a', '#f2f0e2'][i]!,
+        );
+      dwelling(c, 12, -10, 1.15, '#c2603f');
+      ellipse(c, 48, 22, 6, 4, '#b9a475');
+      ellipse(c, 49, 19, 5, 4, '#d3c18d');
+    } else if (kind === 'temple') {
       ellipse(c, 0, 8, 148, 69, '#56664b25');
       box(c, 0, 0, 145, 72, 8, '#e7c890', '#be9e70', '#a8875b');
       box(c, 0, -8, 126, 63, 10, '#ffe1a4', '#d5b580', '#bd9a6c');
@@ -750,6 +421,32 @@ export class TextureAtlas {
         '#52b4bc',
         '#bac3a0',
       );
+      c.save();
+      c.beginPath();
+      c.moveTo(0, -75);
+      c.lineTo(130, -10);
+      c.lineTo(0, 55);
+      c.lineTo(-130, -10);
+      c.closePath();
+      c.clip();
+      const depth = c.createRadialGradient(10, -6, 10, 0, -10, 130);
+      depth.addColorStop(0, '#2c8e9c');
+      depth.addColorStop(0.7, '#4fb4bd');
+      depth.addColorStop(1, '#8ddad0');
+      c.fillStyle = depth;
+      c.fillRect(-130, -75, 260, 130);
+      c.restore();
+      for (const [x, y, s] of [
+        [-84, -8, 1.6],
+        [-70, 4, 1.3],
+        [76, 2, 1.5],
+        [62, 12, 1.2],
+        [-30, 30, 1.4],
+      ] as [number, number, number][]) {
+        ellipse(c, x + 6, y + 3, 6, 2.8, '#5fae5a', '#2f7444', 0.6);
+        ellipse(c, x - 7, y + 4, 5, 2.4, '#6dbb63', '#2f7444', 0.6);
+        lotusFlower(c, x, y, s);
+      }
       for (let i = 0; i < 14; i++) {
         const x = -95 + i * 15;
         const y = (i % 3) * 8 - 10;
@@ -789,8 +486,19 @@ export class TextureAtlas {
           [0, 30],
           [-64, -2],
         ],
-        '#80b85f',
+        '#78b98f',
       );
+      // Flooded terraces: sky reflections between the rice rows.
+      for (let row = 0; row < 9; row++)
+        line(
+          c,
+          [
+            [-58 + row * 6.8, -5 + row * 3.4],
+            [6 + row * 6.8, -37 + row * 3.4],
+          ],
+          row % 2 ? '#bfe8dc66' : '#5aa58a55',
+          2,
+        );
       for (let row = 0; row < 9; row++)
         for (let col = 0; col < 9; col++) {
           const x = (col - row) * 6.8;

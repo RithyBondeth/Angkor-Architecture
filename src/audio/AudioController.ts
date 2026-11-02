@@ -115,6 +115,7 @@ export class AudioController {
       this.safe(() => {
         if (event.type === 'placement') this.engine.playPlacement(event.kind);
         else if (event.type === 'delivery') this.engine.playDelivery(event.mode);
+        else if (event.type === 'completed') this.engine.playCompletion();
       }),
     );
     const world = game.subscribe(() =>

@@ -75,12 +75,14 @@ export class Game {
     this.water.step(this.state);
     this.engineering.step(this.state);
     for (const e of this.survival.environment(this.state)) this.log(e.title, e.text, e.icon);
-    for (const b of this.construction.step(this.state))
+    for (const b of this.construction.step(this.state)) {
       this.log(
         `${BUILDINGS[b.kind].name} completed`,
         `${BUILDINGS[b.kind].name} is ready to serve your city.`,
         'hammer',
       );
+      this.emit({ type: 'completed', id: b.id, kind: b.kind });
+    }
     for (const arrival of this.logistics.step(this.state)) this.emit(arrival);
     for (const e of this.survival.food(this.state)) this.log(e.title, e.text, e.icon);
     if (oldSeason !== SeasonManager.at(this.state.day).wet) {

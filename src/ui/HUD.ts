@@ -1,6 +1,9 @@
 import { kingdomAlerts } from '../simulation/KingdomAlerts';
 import { kingdomSummary } from './LegacyUI';
 import { Celebrations } from './Celebrations';
+import { decorDetails } from './DecorUI';
+import { nextStep, nextStepMarkup } from './NextStepUI';
+import { BEAUTY_CAP, beauty } from '../simulation/Beauty';
 import { offlineSettings } from '../pwa/OfflineApp';
 import { kingdomNameInput } from './SaveSlotsUI';
 import type { AudioController } from '../audio/AudioController';
@@ -68,6 +71,13 @@ type Panel =
   | 'survival'
   | 'campaign';
 
+/** Replay a small count-up flourish on a resource readout. */
+function bump(element: HTMLElement, up: boolean) {
+  element.classList.remove('bump-up', 'bump-down');
+  void element.offsetWidth;
+  element.classList.add(up ? 'bump-up' : 'bump-down');
+}
+
 export class HUD {
   private category: Category = 'all';
   private panel: Panel = 'overview';
@@ -95,6 +105,9 @@ export class HUD {
   private dialogResumeSpeed: 0 | 1 | 2 | 4 | null = null;
   private lastMapRevision = '';
   private lastUnlocks = '';
+  private nextStepHtml = '';
+  private nextStepKey = '';
+  private readonly shownResources = new Map<Resource, number>();
   constructor(
     private readonly game: Game,
     private readonly renderer: WorldRenderer,
@@ -325,6 +338,12 @@ export class HUD {
           this.toast(r.message, !r.ok);
         }
         if (action === 'build') this.chooseBuilding(button.dataset.kind as BuildingKind);
+        if (action === 'next-decor') {
+          this.chooseBuilding(null);
+          this.category = 'decor';
+          this.renderBuildMenu();
+          this.setBuildDock(true);
+        }
         if (action === 'category') {
           this.category = button.dataset.category as Category;
           this.renderBuildMenu();
@@ -771,16 +790,35 @@ export class HUD {
         ? starter.includes(k)
         : this.category === 'all' || BUILDINGS[k].category === this.category,
     )
-      .map((kind) => {
+      .map((kind, index) => {
         const def = BUILDINGS[kind];
         const locked = !buildingUnlocked(this.game.state, kind);
         const cost = Object.entries(def.cost)
           .slice(0, 2)
           .map(([r, n]) => `<span>${icon(RESOURCE_INFO[r as Resource].icon)}${n}</span>`)
           .join('');
-        return `<button class="building-card ${kind === this.placement ? 'selected' : ''} ${locked ? 'locked' : ''}" aria-disabled="${locked}" data-action="build" data-kind="${kind}" aria-pressed="${kind === this.placement}" title="${locked ? `Unlocks at ${def.unlockMerit} merit. ` : ''}${def.description} About ${Math.ceil(((def.buildWork / def.builders) * CONFIG.tickMs) / 1000)}s with ${def.builders} builders."><div class="building-art"><img src="${this.renderer.atlas.thumbnail(kind)}" alt="" />${BUILD_ORDER.indexOf(kind) < 6 ? `<kbd>${BUILD_ORDER.indexOf(kind) + 1}</kbd>` : ''}</div><strong>${def.name}</strong><div class="building-cost">${locked ? `<span class="unlock-cost">${icon('lock')}${def.unlockMerit} merit</span>` : cost}<span class="build-plus" title="Recommended builders">${icon('hammer')}${def.builders}</span></div></button>`;
+        return `<button style="--i:${index}" class="building-card ${kind === this.placement ? 'selected' : ''} ${locked ? 'locked' : ''}" aria-disabled="${locked}" data-action="build" data-kind="${kind}" aria-pressed="${kind === this.placement}" title="${locked ? `Unlocks at ${def.unlockMerit} merit. ` : ''}${def.description} About ${Math.ceil(((def.buildWork / def.builders) * CONFIG.tickMs) / 1000)}s with ${def.builders} builders."><div class="building-art"><img src="${this.renderer.atlas.thumbnail(kind)}" alt="" />${BUILD_ORDER.indexOf(kind) < 6 ? `<kbd>${BUILD_ORDER.indexOf(kind) + 1}</kbd>` : ''}</div><strong>${def.name}</strong><div class="building-cost">${locked ? `<span class="unlock-cost">${icon('lock')}${def.unlockMerit} merit</span>` : cost}<span class="build-plus" title="Recommended builders">${icon('hammer')}${def.builders}</span></div></button>`;
       })
       .join('');
+  }
+  private updateNextStep() {
+    const step = nextStep(this.game.state);
+    const html = step
+      ? `<button class="next-step" ${step.action} title="${esc(step.hint)}">${nextStepMarkup(step)}</button>`
+      : '';
+    if (html !== this.nextStepHtml) {
+      const slot = this.root.querySelector<HTMLElement>('#next-step')!;
+      const focused = slot.contains(document.activeElement);
+      slot.innerHTML = html;
+      this.nextStepHtml = html;
+      // Animate only a new objective, not progress on the current one.
+      if (step && step.key !== this.nextStepKey) slot.firstElementChild?.classList.add('arrive');
+      if (focused) slot.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });
+    }
+    this.nextStepKey = step?.key ?? '';
+    this.root.querySelectorAll<HTMLElement>('.building-card').forEach((card) => {
+      card.classList.toggle('suggested', !!step?.kind && card.dataset.kind === step.kind);
+    });
   }
   private helpTutorial() {
     const t = this.game.state.tutorial;
@@ -885,9 +923,12 @@ export class HUD {
         menu.querySelector<HTMLElement>(`[data-kind="${kind}"]`)?.focus({ preventScroll: true });
     }
     for (const resource of Object.keys(RESOURCE_INFO) as Resource[]) {
-      this.root.querySelector(`#resource-${resource}`)!.textContent = fmt(
-        state.resources[resource],
-      );
+      const value = this.root.querySelector<HTMLElement>(`#resource-${resource}`)!;
+      value.textContent = fmt(state.resources[resource]);
+      const previous = this.shownResources.get(resource);
+      const now = Math.floor(state.resources[resource]);
+      if (previous !== undefined && previous !== now) bump(value, now > previous);
+      this.shownResources.set(resource, now);
       const rate = deliveredRate(state, resource);
       const rateElement = this.root.querySelector<HTMLElement>(`#rate-${resource}`)!;
       rateElement.textContent = `+${rate.toLocaleString('en-US', { maximumFractionDigits: 1 })} / min ${resource === 'merit' ? 'earned' : 'delivered'}`;
@@ -917,6 +958,8 @@ export class HUD {
       state.survival.hunger > 0
         ? `${Math.round(productivity(state) * 100)}% productive`
         : `${Math.floor(state.happiness)}% content`;
+    this.root.querySelector<HTMLElement>('#happiness')!.title =
+      `Kingdom beauty ${beauty(state)} / ${BEAUTY_CAP}. Decorations near dwellings raise contentment and help residents settle.`;
     this.root.querySelector('#region-name')!.textContent = scenarioFor(state).region;
     this.root.querySelector('#game-date')!.textContent = `${season.year} CE`;
     this.root.querySelector('#game-day')!.textContent = `Day ${state.day}`;
@@ -947,6 +990,7 @@ export class HUD {
         Object.entries(def.cost).some(([r, n]) => state.resources[r as Resource] < n),
       );
     });
+    this.updateNextStep();
     this.root.querySelector('#projects-count')!.textContent = String(
       state.buildings.filter((b) => b.construction).length,
     );
@@ -1011,7 +1055,7 @@ export class HUD {
       );
       const fill = Math.min(100, (volume / (def.size * def.size * 6)) * 100);
       this.renderInspector(
-        `<div class="panel-eyebrow">${def.category === 'water' ? 'Water management' : def.category === 'production' ? 'Production' : def.category === 'infrastructure' ? 'Paths & bridges' : 'Civic life'}<button class="icon-button" data-action="close-inspector" aria-label="Close building details">${icon('x')}</button></div><h2>${selected.kind === 'baray' ? 'Royal Baray' : def.name}</h2><p class="panel-subtitle">${def.subtitle}</p><div class="inspector-art"><img src="${this.renderer.atlas.thumbnail(selected.kind)}" alt="Isometric ${def.name.toLowerCase()}" /></div><div class="operational ${selected.enabled && selected.condition === 100 && !selected.crop?.failed ? '' : 'idle'}">${icon(selected.condition < 100 || selected.crop?.failed ? 'warning' : selected.enabled ? 'check-circle' : 'pause-circle')}${buildingStatus(selected)}</div><p class="building-description">${def.description}</p>${buildingSurvivalDetails(selected, state)}${supportDetails(selected, state)}${logisticsDetails(selected, state)}${templeDetails(selected, state)}${selected.kind === 'baray' ? `<div class="stat-heading"><span>Water stored</span><strong>${Math.round(fill)}%</strong></div><div class="water-meter"><span style="width:${fill}%"></span></div><div class="water-volume">${fmt(volume * 40)} <span>/ ${fmt(def.size * def.size * 6 * 40)} m³</span></div><div class="detail-row"><span>${icon('cloud-rain')}Current season</span><strong>${SeasonManager.at(state.day).name}</strong></div><div class="detail-row"><span>${icon('plant')}Irrigated fields</span><strong>${state.buildings.filter((b) => b.kind === 'paddy' && !b.construction && WaterSimulation.irrigation(state, b.x, b.y) > 0.2).length} fields</strong></div>${reservoirHistoryChart(state, selected)}` : `<div class="detail-row"><span>${icon('users')}Workers</span><strong>${def.workers}</strong></div>${def.production ? `<div class="detail-row"><span>${icon(RESOURCE_INFO[def.production.resource].icon)}Potential / cycle</span><strong>+${fmt(Logistics.outputs(state).get(selected.id) ?? 0)} ${RESOURCE_INFO[def.production.resource].name.toLowerCase()}</strong></div>` : ''}${selected.kind === 'paddy' ? `<div class="detail-row"><span>${icon('drop')}Irrigation</span><strong>${Math.round(irrigated * 100)}%</strong></div>` : ''}${selected.stock ? `<div class="detail-row"><span>Awaiting transport</span><strong>${fmt(selected.stock)}</strong></div>` : ''}`}${selected.kind === 'temple' ? `<div class="temple-stages">${['Laterite foundation', 'Sandstone towers', 'Sculpted reliefs'].map((s, i) => `<span class="${i < selected.level ? 'done' : ''}">${icon(i < selected.level ? 'check-circle' : 'circle')}${s}</span>`).join('')}</div>${templeUpgradeButton(selected, state)}` : ''}${!['baray', 'canal', 'moat', 'house', 'road', 'bridge'].includes(selected.kind) ? `<button class="secondary-button full-width" data-action="toggle-building">${icon(selected.enabled ? 'pause' : 'play')}${selected.kind === 'gate' ? (selected.enabled ? 'Close floodgate' : 'Open floodgate') : ['granary', 'workshop', 'warehouse'].includes(selected.kind) ? (selected.enabled ? 'Pause service' : 'Resume service') : selected.enabled ? 'Pause production' : 'Resume production'}</button>` : ''}<button class="remove-structure full-width" data-action="remove-structure" data-id="${selected.id}" aria-label="Remove structure">${icon('trash')}Remove structure<span>Review refund</span></button>`,
+        `<div class="panel-eyebrow">${def.category === 'water' ? 'Water management' : def.category === 'production' ? 'Production' : def.category === 'infrastructure' ? 'Paths & bridges' : def.category === 'decor' ? 'Gardens & decor' : 'Civic life'}<button class="icon-button" data-action="close-inspector" aria-label="Close building details">${icon('x')}</button></div><h2>${selected.kind === 'baray' ? 'Royal Baray' : def.name}</h2><p class="panel-subtitle">${def.subtitle}</p><div class="inspector-art"><img src="${this.renderer.atlas.thumbnail(selected.kind)}" alt="Isometric ${def.name.toLowerCase()}" /></div><div class="operational ${selected.enabled && selected.condition === 100 && !selected.crop?.failed ? '' : 'idle'}">${icon(selected.condition < 100 || selected.crop?.failed ? 'warning' : selected.enabled ? 'check-circle' : 'pause-circle')}${buildingStatus(selected)}</div><p class="building-description">${def.description}</p>${buildingSurvivalDetails(selected, state)}${supportDetails(selected, state)}${logisticsDetails(selected, state)}${templeDetails(selected, state)}${selected.kind === 'baray' ? `<div class="stat-heading"><span>Water stored</span><strong>${Math.round(fill)}%</strong></div><div class="water-meter"><span style="width:${fill}%"></span></div><div class="water-volume">${fmt(volume * 40)} <span>/ ${fmt(def.size * def.size * 6 * 40)} m³</span></div><div class="detail-row"><span>${icon('cloud-rain')}Current season</span><strong>${SeasonManager.at(state.day).name}</strong></div><div class="detail-row"><span>${icon('plant')}Irrigated fields</span><strong>${state.buildings.filter((b) => b.kind === 'paddy' && !b.construction && WaterSimulation.irrigation(state, b.x, b.y) > 0.2).length} fields</strong></div>${reservoirHistoryChart(state, selected)}` : `<div class="detail-row"><span>${icon('users')}Workers</span><strong>${def.workers}</strong></div>${def.production ? `<div class="detail-row"><span>${icon(RESOURCE_INFO[def.production.resource].icon)}Potential / cycle</span><strong>+${fmt(Logistics.outputs(state).get(selected.id) ?? 0)} ${RESOURCE_INFO[def.production.resource].name.toLowerCase()}</strong></div>` : ''}${selected.kind === 'paddy' ? `<div class="detail-row"><span>${icon('drop')}Irrigation</span><strong>${Math.round(irrigated * 100)}%</strong></div>` : ''}${selected.stock ? `<div class="detail-row"><span>Awaiting transport</span><strong>${fmt(selected.stock)}</strong></div>` : ''}`}${selected.kind === 'temple' ? `<div class="temple-stages">${['Laterite foundation', 'Sandstone towers', 'Sculpted reliefs'].map((s, i) => `<span class="${i < selected.level ? 'done' : ''}">${icon(i < selected.level ? 'check-circle' : 'circle')}${s}</span>`).join('')}</div>${templeUpgradeButton(selected, state)}` : ''}${decorDetails(selected, state)}${!['baray', 'canal', 'moat', 'house', 'road', 'bridge'].includes(selected.kind) && def.category !== 'decor' ? `<button class="secondary-button full-width" data-action="toggle-building">${icon(selected.enabled ? 'pause' : 'play')}${selected.kind === 'gate' ? (selected.enabled ? 'Close floodgate' : 'Open floodgate') : ['granary', 'workshop', 'warehouse'].includes(selected.kind) ? (selected.enabled ? 'Pause service' : 'Resume service') : selected.enabled ? 'Pause production' : 'Resume production'}</button>` : ''}<button class="remove-structure full-width" data-action="remove-structure" data-id="${selected.id}" aria-label="Remove structure">${icon('trash')}Remove structure<span>Review refund</span></button>`,
       );
       return;
     }

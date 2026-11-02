@@ -19,6 +19,8 @@ import { floodUnsafe } from '../simulation/survivalRules';
 import type { Game } from '../core/Game';
 import { Camera } from './Camera';
 import { TextureAtlas } from './TextureAtlas';
+import { Effects } from './Effects';
+import { TREE_VARIANTS } from './natureArt';
 import { toGrid, toScreen } from './isometric';
 
 export class WorldRenderer {
@@ -53,7 +55,14 @@ export class WorldRenderer {
   private resizeObserver!: ResizeObserver;
   private readonly abort = new AbortController();
   private unsubscribe?: () => void;
+  private unsubscribeEvents?: () => void;
   private readonly reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  private readonly effects = new Effects(!this.reducedMotion);
+  private readonly glints = new Graphics();
+  private waterTiles: number[] = [];
+  private ghostBaseY = 0;
+  private initialized = false;
+  private nextAmbient = 0;
   onRoutePreview: (preview: RoutePreview | null) => void = () => {};
   onPreview: (message: string, ok: boolean, advice: SiteAdvice[]) => void = () => {};
   onResource: (message: string) => void = () => {};
@@ -85,8 +94,10 @@ export class WorldRenderer {
     this.app.canvas.setAttribute('role', 'img');
     this.world.addChild(
       this.ground,
+      this.glints,
       this.routes,
       this.objects,
+      this.effects.layer,
       this.flowArrows,
       this.labels,
       this.ghost,
@@ -102,7 +113,7 @@ export class WorldRenderer {
       sprite.position.set(pos.x, pos.y);
       this.ground.addChild(sprite);
       this.tileSprites.push(sprite);
-      const water = new Sprite(this.atlas.get(`water-${tile.variant}`));
+      const water = new Sprite(this.atlas.get(`flood-${tile.variant}`));
       water.anchor.set(0.5, 18 / 56);
       water.position.set(pos.x, pos.y - 0.4);
       water.alpha = 0;
@@ -179,7 +190,11 @@ export class WorldRenderer {
     });
     this.resizeObserver.observe(this.host);
     this.unsubscribe = this.game.subscribe(() => this.sync());
+    this.unsubscribeEvents = this.game.onEvent((event) => {
+      if (event.type === 'completed') this.celebrate(event.id);
+    });
     this.sync();
+    this.initialized = true;
   }
   private addLabel(text: string, x: number, y: number, offset: number) {
     const p = toScreen(x, y);
@@ -200,6 +215,7 @@ export class WorldRenderer {
   }
   private sync() {
     const state = this.game.state;
+    const wet: number[] = [];
     this.objects.alpha = this.overlay === 'elevation' ? 0.4 : this.overlay === 'flow' ? 0.7 : 1;
     for (let i = 0; i < state.tiles.length; i++) {
       const t = state.tiles[i]!;
@@ -220,12 +236,15 @@ export class WorldRenderer {
               ? 0x7cb85c
               : 0x8e9988;
       const channel = ['water', 'reservoir', 'moat', 'canal', 'bridge'].includes(t.terrain);
+      if (channel && t.water >= 0.45) wet.push(i);
       const flood = this.waterMarkers[i]!;
       flood.alpha = this.overlay === 'elevation' || channel ? 0 : Math.min(0.6, t.water * 0.55);
       if (channel && t.water < 0.45) sprite.tint = 0xa7ac7b;
       if (t.terrain === 'forest' && !buildingAt(state, t.x, t.y)) {
         if (!this.treeSprites.has(i)) {
-          const tree = new Sprite(this.atlas.get(`tree-${t.variant}`));
+          const tree = new Sprite(
+            this.atlas.get(`tree-${(t.variant + t.x * 3 + t.y * 5) % TREE_VARIANTS}`),
+          );
           const p = toScreen(t.x, t.y);
           tree.anchor.set(0.5, 145 / 160);
           tree.position.set(p.x, p.y);
@@ -239,6 +258,7 @@ export class WorldRenderer {
         this.treeSprites.delete(i);
       }
     }
+    this.waterTiles = wet;
     for (const [id, sprite] of this.buildingSprites)
       if (!state.buildings.some((b) => b.id === id)) {
         sprite.destroy();
@@ -272,6 +292,10 @@ export class WorldRenderer {
           site.view.zIndex = center.y + size * 8 + 1;
           this.objects.addChild(site.view);
           this.sites.set(b.id, site);
+          if (this.initialized) {
+            this.effects.pop(site.view, 0.2, 520);
+            this.effects.dust(center.x, center.y, size / 2 + 0.4);
+          }
         }
         const p = b.construction;
         site.label.text = p.paused
@@ -333,7 +357,9 @@ export class WorldRenderer {
             : b.level === 2
               ? 'temple-towers'
               : 'temple'
-          : b.kind;
+          : b.kind === 'house' && (b.x + b.y) % 2
+            ? 'house-b'
+            : b.kind;
       let sprite = this.buildingSprites.get(b.id);
       if (!sprite) {
         sprite = new Sprite(this.atlas.get(artwork));
@@ -345,6 +371,7 @@ export class WorldRenderer {
         if (size === 1 && b.kind !== 'bridge') sprite.scale.set(0.72);
         this.objects.addChild(sprite);
         this.buildingSprites.set(b.id, sprite);
+        if (this.initialized) this.effects.pop(sprite);
       }
       if (sprite.label !== artwork) {
         sprite.texture = this.atlas.get(artwork);
@@ -402,6 +429,7 @@ export class WorldRenderer {
           .fill({ color: 0xe8d6a3, alpha: 0.12 + Math.sin(elapsed * 0.0006 + i) * 0.07 });
       }
     }
+    this.animate(elapsed);
     for (const c of this.game.state.couriers) {
       const sprite = this.courierSprites.get(c.id);
       if (!sprite) continue;
@@ -415,17 +443,86 @@ export class WorldRenderer {
       const to = c.path[Math.min(index + 1, c.path.length - 1)]!;
       const mix = progress - index;
       const p = toScreen(from.x + (to.x - from.x) * mix, from.y + (to.y - from.y) * mix);
-      sprite.position.set(
-        p.x,
-        p.y - (c.kind === 'barge' && !this.reducedMotion ? Math.sin(elapsed * 0.002) * 1.2 : 0),
-      );
+      const sway = this.reducedMotion
+        ? 0
+        : c.kind === 'barge'
+          ? Math.sin(elapsed * 0.002) * 1.2
+          : this.game.state.speed > 0
+            ? Math.abs(Math.sin(elapsed * 0.014 + index)) * 1.6
+            : 0;
+      sprite.position.set(p.x, p.y - sway);
       sprite.zIndex = p.y + 7;
     }
     this.app.renderer.render(this.app.stage);
   }
   select(id: string | null) {
+    const changed = id !== this.selected;
     this.selected = id;
     this.sync();
+    const sprite = id ? (this.buildingSprites.get(id) ?? this.sites.get(id)?.view) : null;
+    if (changed && sprite) this.effects.bounce(sprite);
+  }
+  /** Sparkles and a springy settle when construction, an upgrade, or a repair finishes. */
+  private celebrate(id: string) {
+    const sprite = this.buildingSprites.get(id);
+    const b = this.game.state.buildings.find((b) => b.id === id);
+    if (!b) return;
+    const size = BUILDINGS[b.kind].size;
+    const at = toScreen(b.x + (size - 1) / 2, b.y + (size - 1) / 2);
+    if (sprite) this.effects.pop(sprite, 0.82, 700);
+    this.effects.ripple(at.x, at.y, 0xffe08a, size);
+    this.effects.burst(
+      at.x,
+      at.y - 30 * size,
+      [0xffd66b, 0xfff4c2, 0x9fe0a0, 0xf59bc0],
+      14 + size * 6,
+      50 + size * 18,
+    );
+  }
+  /** Per-frame ambience: swaying trees, glinting water, bobbing previews, smoke and fireflies. */
+  private animate(now: number) {
+    this.effects.update(now);
+    this.glints.clear();
+    this.highlight.alpha =
+      this.selected && !this.placement ? 0.78 + Math.sin(now * 0.005) * 0.22 : 1;
+    this.tutorialMarker.alpha = 0.7 + Math.sin(now * 0.006) * 0.3;
+    if (this.reducedMotion) return;
+    if (this.ghost.visible) this.ghost.y = this.ghostBaseY - 3 - Math.sin(now * 0.006) * 3;
+    for (const tree of this.treeSprites.values())
+      tree.skew.x = Math.sin(now * 0.0011 + tree.x * 0.013 + tree.y * 0.021) * 0.028;
+    const tiles = this.game.state.tiles;
+    const count = Math.min(70, this.waterTiles.length);
+    for (let i = 0; i < count; i++) {
+      // Stride through the wet tiles so glints spread across rivers and reservoirs.
+      const index = this.waterTiles[Math.floor((i * 2654435761) % this.waterTiles.length)]!;
+      const t = tiles[index]!;
+      const phase = now * 0.0016 + i * 1.7;
+      const alpha = Math.max(0, Math.sin(phase)) ** 3 * 0.85;
+      if (alpha < 0.05) continue;
+      const p = toScreen(t.x, t.y);
+      const ox = ((i * 37) % 40) - 20;
+      const oy = ((i * 23) % 16) - 8;
+      this.glints
+        .moveTo(p.x + ox - 4, p.y + oy + 1)
+        .lineTo(p.x + ox + 4, p.y + oy - 1)
+        .stroke({ color: 0xffffff, width: 1.4, alpha });
+    }
+    if (now < this.nextAmbient) return;
+    this.nextAmbient = now + 900 + Math.random() * 900;
+    const standing = this.game.state.buildings.filter((b) => !b.construction && b.condition > 0);
+    const homes = standing.filter((b) => b.kind === 'house');
+    const home = homes[Math.floor(Math.random() * homes.length)];
+    if (home) {
+      const p = toScreen(home.x + 0.5, home.y + 0.5);
+      this.effects.smoke(p.x - 14, p.y - 78);
+    }
+    const decor = standing.filter((b) => BUILDINGS[b.kind].appeal);
+    const charm = decor[Math.floor(Math.random() * decor.length)];
+    if (charm) {
+      const size = BUILDINGS[charm.kind].size;
+      const p = toScreen(charm.x + (size - 1) / 2, charm.y + (size - 1) / 2);
+      this.effects.glow(p.x, p.y - 20, charm.kind === 'lotuspond' ? 0xffc6dc : 0xffe68a);
+    }
   }
   guideSite(site: (Point & { kind: BuildingKind }) | null) {
     this.tutorialMarker.clear();
@@ -521,7 +618,9 @@ export class WorldRenderer {
   }
   private click(x: number, y: number, touch = false) {
     const p = this.point(x, y);
+    const at = toScreen(p.x, p.y);
     if (touch && this.placement && !this.demolition) {
+      this.effects.ripple(at.x, at.y, 0xf2dfab, 0.8);
       this.touchPlacement.stage(this.placement, p);
       this.hover = p;
       this.onTouchPlan(true);
@@ -535,6 +634,8 @@ export class WorldRenderer {
     } else if (this.placement) {
       const result = this.game.place(this.placement, p);
       this.onPlace(result.message, result.ok);
+      this.effects.ripple(at.x, at.y, result.ok ? 0x9fe07a : 0xe47c60);
+      if (!result.ok) this.effects.shake(this.ghost);
       if (result.ok) {
         const b = buildingAt(this.game.state, p.x, p.y);
         this.select(b?.id ?? null);
@@ -542,6 +643,8 @@ export class WorldRenderer {
       }
     } else {
       const b = buildingAt(this.game.state, p.x, p.y);
+      if (tileAt(this.game.state, p.x, p.y))
+        this.effects.ripple(at.x, at.y, b ? 0xffd66b : 0xfff5d5, b ? 1 : 0.7);
       this.select(b?.id ?? null);
       this.onSelect(b?.id ?? null);
       const tile = tileAt(this.game.state, p.x, p.y);
@@ -633,7 +736,8 @@ export class WorldRenderer {
       this.ghost.scale.set(size === 1 && this.placement !== 'bridge' ? 0.72 : 1);
       const center = toScreen(origin.x + (size - 1) / 2, origin.y + (size - 1) / 2);
       this.ghost.position.set(center.x, center.y);
-      this.ghost.alpha = 0.5;
+      this.ghostBaseY = center.y;
+      this.ghost.alpha = 0.62;
       this.ghost.tint = result.ok ? 0xdcebc3 : 0xe6a18c;
       this.ghost.visible = true;
       this.onPreview(result.message, result.ok, result.advice);
@@ -728,8 +832,10 @@ export class WorldRenderer {
   destroy() {
     this.abort.abort();
     this.unsubscribe?.();
+    this.unsubscribeEvents?.();
     this.resizeObserver.disconnect();
     this.camera.destroy();
+    this.effects.destroy();
     this.app.destroy(true, { children: true });
     this.atlas.texture.destroy(true);
   }

@@ -1,0 +1,350 @@
+/* Renovation layer: guidance, decor feedback, and tactile motion. Reduced-motion users get none
+   of the animation (see the global rule in styles.css). */
+
+:root {
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --next-surface: #fff6dc;
+  --next-border: #e3c27a;
+  --next-ink: #6b4b16;
+  --suggest-glow: #f2c14e;
+}
+[data-theme='dark'] {
+  --next-surface: #3b3a24;
+  --next-border: #a88a45;
+  --next-ink: #f3dca1;
+  --suggest-glow: #e9b949;
+}
+
+/* ---------- Next step guide ---------- */
+.game-shell .build-tray-header {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+.next-step-slot:empty {
+  display: none;
+}
+.next-step-slot {
+  min-width: 0;
+  flex: 0 1 380px;
+}
+.next-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 8px 6px 6px;
+  border: 1px solid var(--next-border);
+  border-radius: 12px;
+  background: var(--next-surface);
+  color: var(--next-ink);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 2px 0 #d6b26a55;
+  transition:
+    transform 160ms var(--spring),
+    box-shadow 160ms ease;
+}
+.next-step:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px #b9902f33;
+}
+.next-step:active {
+  transform: translateY(0) scale(0.98);
+}
+.next-step.arrive {
+  animation: next-arrive 700ms var(--spring) both;
+}
+.next-step-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: #f2c14e;
+  color: #5a3d0c;
+  font-size: 18px;
+  animation: next-nudge 2.8s ease-in-out 1s infinite;
+}
+.next-step-text {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 1px;
+}
+.next-step-text small {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+.next-step-text strong {
+  font:
+    500 13px 'Fredoka',
+    sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.next-step-bar {
+  display: block;
+  height: 4px;
+  margin-top: 2px;
+  border-radius: 4px;
+  background: #e9d6a6;
+  overflow: hidden;
+}
+.next-step-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #e3a531, #8cbf55);
+  transition: width 600ms var(--ease-out);
+}
+.next-step-go {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--green);
+  color: #fffbe9;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.next-step:hover .next-step-go .ph {
+  animation: arrow-hop 600ms var(--ease-out);
+}
+@keyframes next-arrive {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes next-nudge {
+  0%,
+  86%,
+  100% {
+    transform: none;
+  }
+  90% {
+    transform: rotate(-10deg) scale(1.08);
+  }
+  95% {
+    transform: rotate(8deg) scale(1.08);
+  }
+}
+@keyframes arrow-hop {
+  50% {
+    transform: translateX(4px);
+  }
+}
+@media (max-width: 600px) {
+  .next-step-slot {
+    flex-basis: 100%;
+    order: 3;
+  }
+  .next-step-go {
+    padding: 6px 8px;
+  }
+}
+
+/* ---------- Building dock ---------- */
+.game-shell .building-card {
+  transition:
+    transform 180ms var(--spring),
+    box-shadow 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease;
+  animation: card-rise 420ms var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 28ms);
+}
+.game-shell .building-card:hover:not(.locked) {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 18px #3f593a26;
+}
+.game-shell .building-card:active:not(.locked) {
+  transform: translateY(0) scale(0.96);
+}
+.game-shell .building-card.selected {
+  animation: card-pick 420ms var(--spring);
+}
+.game-shell .building-art img {
+  object-fit: contain;
+  transition: transform 260ms var(--spring);
+}
+.game-shell .building-card:hover:not(.locked) .building-art img,
+.game-shell .building-card.selected .building-art img {
+  transform: translateY(-3px) scale(1.12);
+}
+.game-shell .building-card.suggested {
+  border-color: var(--suggest-glow);
+  animation:
+    card-rise 420ms var(--ease-out) both,
+    suggest-pulse 2.2s ease-in-out 600ms infinite;
+}
+.game-shell .building-card.suggested::after {
+  content: 'Next';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--suggest-glow);
+  color: #4b3208;
+  font:
+    600 9px 'Fredoka',
+    sans-serif;
+  letter-spacing: 0.04em;
+}
+@keyframes card-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@keyframes card-pick {
+  40% {
+    transform: scale(1.05);
+  }
+}
+@keyframes suggest-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 #f2c14e00;
+  }
+  50% {
+    box-shadow: 0 0 0 4px #f2c14e55;
+  }
+}
+.game-shell .build-tabs button {
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    transform 160ms var(--spring);
+}
+.game-shell .build-tabs button:active {
+  transform: scale(0.94);
+}
+.game-shell .build-tray:not(.collapsed) .building-list {
+  animation: dock-open 320ms var(--ease-out);
+}
+@keyframes dock-open {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* ---------- Buttons ---------- */
+.primary-button,
+.secondary-button,
+.icon-button,
+.nav-item,
+.time-controls > button {
+  transition:
+    transform 140ms var(--spring),
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+.primary-button:active:not(:disabled),
+.secondary-button:active:not(:disabled),
+.icon-button:active:not(:disabled),
+.nav-item:active,
+.time-controls > button:active {
+  transform: scale(0.93);
+}
+.game-shell .nav-item:hover .ph {
+  animation: icon-wiggle 420ms var(--spring);
+}
+@keyframes icon-wiggle {
+  40% {
+    transform: rotate(-12deg) scale(1.12);
+  }
+  70% {
+    transform: rotate(6deg);
+  }
+}
+
+/* ---------- Feedback surfaces ---------- */
+.game-shell .toast:not([hidden]) {
+  animation: toast-pop 380ms var(--spring);
+}
+@keyframes toast-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px) scale(0.92);
+  }
+}
+.game-shell .placement-banner:not([hidden]) {
+  animation: banner-rise 360ms var(--ease-out);
+}
+@keyframes banner-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+.command-bar .resource strong {
+  display: inline-block;
+  transform-origin: left center;
+}
+.command-bar .resource strong.bump-up {
+  animation: bump-up 520ms var(--spring);
+}
+.command-bar .resource strong.bump-down {
+  animation: bump-down 420ms ease;
+}
+@keyframes bump-up {
+  35% {
+    transform: scale(1.18);
+    color: #4f9a3a;
+  }
+}
+@keyframes bump-down {
+  35% {
+    transform: translateY(2px);
+    color: #b5603a;
+  }
+}
+
+/* ---------- Decor details ---------- */
+.decor-benefit .ph-heart {
+  color: #d9577f;
+  animation: heart-beat 1.6s ease-in-out infinite;
+}
+.beauty-meter {
+  height: 6px;
+  margin-top: 8px;
+  border-radius: 6px;
+  background: #ead9e0;
+  overflow: hidden;
+}
+.beauty-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #f29bbd, #f2c14e, #8cbf55);
+  transition: width 600ms var(--ease-out);
+}
+@keyframes heart-beat {
+  0%,
+  60%,
+  100% {
+    transform: none;
+  }
+  20% {
+    transform: scale(1.25);
+  }
+  40% {
+    transform: scale(0.95);
+  }
+}
