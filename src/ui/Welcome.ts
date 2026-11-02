@@ -5,10 +5,73 @@ import type { AudioController } from '../audio/AudioController';
 import { scenarioPicker, selectedScenario, updateScenarioDetails } from './ScenarioSelection';
 import { scenarioFor } from '../data/scenarios';
 import { createScenario } from '../core/world';
-import type { GameState } from '../core/types';
+import type { BuildingKind, GameState } from '../core/types';
 import { icon } from './icons';
 import { angkorEmblem } from './emblem';
+import { BUILDINGS } from '../data/buildings';
+import type { ModelKey } from '../rendering/models/models';
 import './welcome.css';
+
+/** Modelled pieces only: each name must also be a ModelKey. */
+const SHOWCASE: (BuildingKind & ModelKey)[] = [
+  'facetower',
+  'elephant',
+  'pavilion',
+  'lotuspond',
+  'gopura',
+  'parasol',
+  'market',
+  'singha',
+  'brazier',
+];
+let showcaseTimer = 0;
+function stopShowcase() {
+  clearInterval(showcaseTimer);
+}
+/** Render a few 3D pieces once the menu has painted, then rotate through them. */
+function startShowcase(root: HTMLElement) {
+  window.setTimeout(() => {
+    void import('../rendering/models/showcase').then(({ renderShowcase }) => {
+      const panel = root.querySelector<HTMLElement>('.welcome-showcase');
+      if (!panel) return;
+      const images = renderShowcase(SHOWCASE.map((key) => ({ key, size: BUILDINGS[key].size })));
+      if (!images || !panel.isConnected) return;
+      const dots = panel.querySelector<HTMLElement>('.showcase-dots')!;
+      dots.innerHTML = SHOWCASE.map(
+        (key, i) =>
+          `<button data-showcase="${i}" aria-label="Show ${BUILDINGS[key].name}"></button>`,
+      ).join('');
+      let index = 0;
+      const show = (next: number) => {
+        index = (next + SHOWCASE.length) % SHOWCASE.length;
+        const def = BUILDINGS[SHOWCASE[index]!];
+        const stage = panel.querySelector<HTMLElement>('.showcase-stage')!;
+        stage.querySelector('img')!.src = images[index]!;
+        stage.classList.remove('arrive');
+        void stage.offsetWidth;
+        stage.classList.add('arrive');
+        panel.querySelector('.showcase-tag')!.textContent =
+          def.category === 'wonder' ? 'Wonder' : 'Garden & decor';
+        panel.querySelector('.showcase-info strong')!.textContent = def.name;
+        panel.querySelector('.showcase-info small')!.textContent = def.subtitle;
+        panel.querySelector('.showcase-info .appeal-badge')!.textContent = `+${def.appeal} beauty`;
+        dots
+          .querySelectorAll('button')
+          .forEach((dot, i) => dot.setAttribute('aria-current', String(i === index)));
+      };
+      dots.addEventListener('click', (event) => {
+        const dot = (event.target as HTMLElement).closest<HTMLElement>('[data-showcase]');
+        if (!dot) return;
+        show(Number(dot.dataset.showcase));
+        stopShowcase();
+      });
+      panel.hidden = false;
+      show(0);
+      if (!matchMedia('(prefers-reduced-motion: reduce)').matches)
+        showcaseTimer = window.setInterval(() => show(index + 1), 3400);
+    });
+  }, 60);
+}
 
 export interface WelcomeChoice {
   state: GameState;
@@ -22,25 +85,40 @@ export async function showWelcome(
   audio: AudioController,
 ): Promise<WelcomeChoice> {
   root.innerHTML = `<main class="welcome-screen" aria-labelledby="welcome-title">
-    <img class="welcome-backdrop" src="/art/angkor-cartoon.jpg" alt="" fetchpriority="high" />
-    <div class="welcome-shade" aria-hidden="true"></div>
+    <div class="welcome-sky" aria-hidden="true">
+      <img class="welcome-backdrop" src="/art/angkor-cartoon.jpg" alt="" fetchpriority="high" />
+      <span class="welcome-cloud one"></span><span class="welcome-cloud two"></span><span class="welcome-cloud three"></span>
+      <div class="welcome-shade"></div>
+      <div class="welcome-petals">${Array.from({ length: 14 }, (_, i) => `<span style="--i:${i}"></span>`).join('')}</div>
+    </div>
     <header class="welcome-header">
-      <span class="welcome-brand"><span class="royal-mark">${angkorEmblem()}</span><span>ANGKOR<span class="brand-subtitle">ARCHITECT</span></span></span>
-      <span class="welcome-edition">Your kingdom. Your story.</span>
+      <span class="welcome-brand"><span class="royal-mark">${angkorEmblem()}</span><span>ANGKOR<span class="brand-subtitle">ARCHITECT · <span lang="km">អង្គរ</span></span></span></span>
+      <span class="welcome-edition">${icon('sparkle')} New: statues &amp; wonders</span>
     </header>
-    <section class="welcome-menu">
-      <div class="welcome-kicker"><span></span> A LITTLE KINGDOM. A GRAND ADVENTURE.</div>
-      <h1 id="welcome-title">Angkor<span>Architect</span></h1>
-      <p class="welcome-intro">Grow your city. Guide the waters.<br>Build something legendary.</p>
-      <nav class="welcome-actions" aria-label="Main menu">
-        <button class="welcome-play" data-menu="play" disabled><span class="menu-button-icon">${icon('play')}</span><span><strong>Play</strong><small>Let’s build a kingdom</small></span>${icon('arrow-up-right')}</button>
-        <button class="welcome-continue" data-menu="continue" aria-describedby="welcome-save" disabled><span class="menu-button-icon">${icon('arrow-counter-clockwise')}</span><span><strong>Continue</strong><small id="welcome-save" role="status">Finding your kingdom…</small></span>${icon('arrow-right')}</button>
-        <button class="welcome-continue" data-menu="slots" disabled>${icon('floppy-disk')} Your kingdoms</button><div class="welcome-secondary"><button data-menu="settings">${icon('sliders-horizontal')} Settings</button><button data-menu="guide">${icon('book-open-text')} How to play</button></div>
-      </nav>
-    </section>
-    <aside class="welcome-world-note"><span class="note-diamond" aria-hidden="true">◇</span><div><span>THE KHMER EMPIRE</span><strong>Big dreams.<br>One little kingdom.</strong><small>A new adventure, one canal at a time.</small></div></aside>
-    <footer class="welcome-footer"><span><span class="live-dot"></span> A world of your own. Play at your own pace.</span><span>${icon('floppy-disk')} Saved on this device <span class="footer-version">EARLY ACCESS · v0.1</span></span></footer>
+    <div class="welcome-body">
+      <section class="welcome-menu">
+        <h1 id="welcome-title" class="welcome-logo"><span class="logo-khmer" lang="km" aria-hidden="true">ស្ថាបត្យករ​អង្គរ</span><span class="logo-main">Angkor</span><span class="logo-ribbon"><span>Architect</span></span></h1>
+        <p class="welcome-intro">Tame the monsoon. Raise a temple city.<br>Build a legend that lasts a thousand years.</p>
+        <nav class="welcome-actions" aria-label="Main menu">
+          <button class="welcome-play" data-menu="play" disabled><span class="menu-button-icon">${icon('play')}</span><span><strong>Play</strong><small>Start a new kingdom</small></span><span class="play-shine" aria-hidden="true"></span></button>
+          <button class="welcome-continue" data-menu="continue" aria-describedby="welcome-save" disabled><span class="menu-button-icon">${icon('arrow-counter-clockwise')}</span><span><strong>Continue</strong><small id="welcome-save" role="status">Finding your kingdom…</small></span>${icon('arrow-right')}</button>
+          <div class="welcome-round">
+            <button data-menu="slots" disabled><span class="round-icon">${icon('crown-simple')}</span>Kingdoms</button>
+            <button data-menu="settings"><span class="round-icon">${icon('gear-six')}</span>Settings</button>
+            <button data-menu="guide"><span class="round-icon">${icon('book-open-text')}</span>How to play</button>
+          </div>
+        </nav>
+      </section>
+      <aside class="welcome-showcase" aria-label="Royal showcase" hidden>
+        <div class="showcase-head"><span>${icon('sparkle')} Royal showcase</span><small>Place them in your kingdom</small></div>
+        <div class="showcase-stage"><span class="showcase-rays" aria-hidden="true"></span><img alt="" /></div>
+        <div class="showcase-info" aria-live="polite"><span class="showcase-tag"></span><strong></strong><small></small><span class="appeal-badge"></span></div>
+        <div class="showcase-dots"></div>
+      </aside>
+    </div>
+    <footer class="welcome-footer"><span><span class="live-dot"></span> A world of your own. Play at your own pace.</span><span>${icon('floppy-disk')} Saved on this device <span class="footer-version">EARLY ACCESS · v0.2</span></span></footer>
   </main><dialog class="welcome-dialog" aria-labelledby="welcome-dialog-title"></dialog>`;
+  startShowcase(root);
 
   const dialog = root.querySelector<HTMLDialogElement>('dialog')!;
   const play = root.querySelector<HTMLButtonElement>('[data-menu="play"]')!;
@@ -87,6 +165,7 @@ export async function showWelcome(
   const choice = new Promise<WelcomeChoice>((resolve) => {
     const enter = (state: GameState, restored: boolean) => {
       abort.abort();
+      stopShowcase();
       dialog.close();
       resolve({ state, restored });
     };
