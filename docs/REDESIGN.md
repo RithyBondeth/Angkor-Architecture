@@ -32,9 +32,12 @@ These are stylized artistic interpretations of Khmer architecture. Artwork is se
 
 The production build and all 116 tests passed. Browser verification covered the cartoon menu, loading the illustrated temple into a saved kingdom, Continue, settings and evening colors, kingdom panels, camera controls, construction selection, and phone/tablet/desktop layouts. Simulation rules and saved kingdom data retain their existing format.
 
-
 ## Unified in-game architecture and touch planning
 
 In-game temple towers now use the same procedural atlas, warm stone faces, upper-left lighting, and isometric construction as the settlement buildings. Foundation, towers, and carved sanctuary remain separate stages; the earlier illustrated temple asset remains bundled for provenance but no longer replaces the map sprites. Tall architecture and trees fade over a different targeted tile behind them, preserving the footprint itself.
 
 Touch navigation uses one-finger panning and midpoint-anchored two-finger pinch zoom. A tap stages a building or route, and a separate confirmation spends resources after revalidation. Actionable issue links, clearly labeled food/water trend estimates, persistent milestone history, and the campaign legacy summary complete this gameplay polish pass.
+
+## Main menu over a living showcase kingdom
+
+The menu no longer uses the generated illustration (`public/art/angkor-cartoon.jpg` was removed). A finished showcase city, generated deterministically with the game's own placement rules and never saved, runs and pans slowly, softly blurred, behind a centred title screen: logo, title, Khmer name, and one menu card (Play, Continue, Kingdoms, Settings, Guide). Warning labels are hidden in this scenery mode. The menu and the kingdom share one sprite atlas, so entering a kingdom is nearly instant.

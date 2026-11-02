@@ -94,6 +94,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
     icon: 'house-line',
     buildWork: 64,
     builders: 3,
+    housing: 8,
   },
   quarry: {
     name: 'Sandstone quarry',
@@ -416,6 +417,66 @@ export const BUILDINGS: Record<BuildingKind, BuildingDefinition> = {
     appeal: 16,
     unlockMerit: ERAS[2].merit,
   },
+  stilthouse: {
+    name: 'Floating stilt house',
+    subtitle: 'A home above the river',
+    description:
+      'A fisher family’s house raised on tall stilts over open river or lake water, beside the bank. Houses four residents and never floods.',
+    category: 'civic',
+    size: 1,
+    cost: { wood: 30, laterite: 4 },
+    workers: 0,
+    icon: 'house-simple',
+    buildWork: 40,
+    builders: 2,
+    housing: 4,
+    onWater: true,
+  },
+  fishery: {
+    name: 'Fishing pier',
+    subtitle: 'Nets, traps, and the morning catch',
+    description:
+      'A pier and fish traps on the riverbank. Place it on land within one tile of open river or lake water. Dried fish joins the city’s rice stores; workers carry it home over dry land.',
+    category: 'production',
+    size: 2,
+    cost: { wood: 40, laterite: 10 },
+    workers: 3,
+    icon: 'fish',
+    buildWork: 56,
+    builders: 3,
+    production: { resource: 'rice', amount: 9 },
+  },
+  royalbarge: {
+    name: 'Royal barge',
+    subtitle: 'A gilded naga on the water',
+    description:
+      'A long ceremonial boat with a naga prow and a golden pavilion, moored on open river or lake water. Strongly lifts the mood of dwellings within four tiles.',
+    category: 'wonder',
+    size: 2,
+    cost: { wood: 60, sandstone: 10 },
+    workers: 0,
+    icon: 'sailboat',
+    buildWork: 64,
+    builders: 3,
+    appeal: 10,
+    onWater: true,
+    unlockMerit: ERAS[1].merit,
+  },
+  lotusraft: {
+    name: 'Lotus raft',
+    subtitle: 'A floating garden',
+    description:
+      'A bamboo raft of potted lotus and floating lanterns, set on open river or lake water. Lifts the mood of dwellings within four tiles.',
+    category: 'decor',
+    size: 1,
+    cost: { wood: 8 },
+    workers: 0,
+    icon: 'flower-lotus',
+    buildWork: 10,
+    builders: 1,
+    appeal: 3,
+    onWater: true,
+  },
 };
 export const RESOURCE_INFO: Record<Resource, { name: string; icon: string; unit: string }> = {
   rice: { name: 'Rice', icon: 'grains', unit: 'sacks' },
@@ -455,6 +516,10 @@ export const BUILD_ORDER: BuildingKind[] = [
   'pavilion',
   'elephant',
   'facetower',
+  'royalbarge',
+  'lotusraft',
+  'stilthouse',
+  'fishery',
 ];
 export const DECOR_KINDS = BUILD_ORDER.filter((kind) => BUILDINGS[kind].category === 'decor');
 export const WONDER_KINDS = BUILD_ORDER.filter((kind) => BUILDINGS[kind].category === 'wonder');

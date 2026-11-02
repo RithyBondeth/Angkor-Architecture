@@ -33,6 +33,14 @@ const TILE_KINDS: TileKind[] = [
   'bridge',
   'flood',
 ];
+/** River wildlife sprites and where each touches the water. */
+export const LIFE_FRAMES = {
+  'life-boat': { width: 128, height: 96, originX: 64, originY: 64 },
+  'life-egret': { width: 48, height: 72, originX: 24, originY: 62 },
+  'life-egret-fly': { width: 80, height: 56, originX: 40, originY: 28 },
+  'life-buffalo': { width: 112, height: 88, originX: 56, originY: 60 },
+} as const;
+export type LifeKey = keyof typeof LIFE_FRAMES;
 /** Tile sprites: 80 × 72 with the top diamond centred at (40, 34). */
 export const TILE_FRAME = { width: 80, height: 72, originY: 34 };
 
@@ -143,6 +151,13 @@ function tower(c: Ctx, x: number, y: number, scale = 1) {
   );
   c.restore();
 }
+let shared: TextureAtlas | null = null;
+/** The main menu and the kingdom share one atlas, so the 3D art is rendered only once. */
+export function sharedAtlas(): TextureAtlas {
+  if (!shared || shared.destroyed) shared = new TextureAtlas();
+  return shared;
+}
+
 /** Every scene sprite shares one GPU texture. Artwork is generated once at startup. */
 export class TextureAtlas {
   private readonly pages: Page[] = [];
@@ -234,6 +249,31 @@ export class TextureAtlas {
       320,
       sprite('temple-foundation', 4, (c) => this.building(c, 'temple', 1)),
     );
+    for (const [key, f] of Object.entries(LIFE_FRAMES) as [
+      LifeKey,
+      (typeof LIFE_FRAMES)[LifeKey],
+    ][])
+      this.add(
+        key,
+        f.width,
+        f.height,
+        render3d(
+          () => buildModel(key),
+          { ...f, scale: 50.9, supersample: 2 },
+          f.width,
+          f.height,
+          (c) =>
+            ellipse(
+              c,
+              f.originX,
+              f.originY - 6,
+              f.width / 4,
+              6,
+              key === 'life-egret' || key === 'life-egret-fly' ? '#fbfaf4' : '#7a4e2c',
+            ),
+        ),
+        2,
+      );
     studio?.dispose();
     this.add('worker', 32, 48, (c) => {
       ellipse(c, 16, 42, 7, 3, '#3f4a3540');
@@ -327,7 +367,9 @@ export class TextureAtlas {
     this.textures.set(key, texture);
     return texture;
   }
+  destroyed = false;
   destroy() {
+    this.destroyed = true;
     for (const texture of this.textures.values()) texture.destroy();
     for (const page of this.pages) page.source?.destroy();
   }

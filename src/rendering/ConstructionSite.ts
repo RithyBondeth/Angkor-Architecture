@@ -35,7 +35,7 @@ export function constructionSite(building: Building, atlas: TextureAtlas) {
   view.addChild(frame);
   const label = new Text({
     text: '0%',
-    style: { fontFamily: 'DM Sans', fontSize: 10, fill: 0xf6edcc },
+    style: { fontFamily: 'Ubuntu, Bayon, sans-serif', fontSize: 10, fill: 0xf6edcc },
   });
   label.anchor.set(0.5);
   label.position.set(0, h + 29);
