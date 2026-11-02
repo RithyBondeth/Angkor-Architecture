@@ -1,3 +1,4 @@
+import { BUILDINGS } from '../data/buildings';
 import type { Building, GameState, Resource } from '../core/types';
 import { templeBlocked, templeWorkFactor } from './TempleEngineering';
 import { footprint, tileAt } from '../core/world';
@@ -43,10 +44,11 @@ export class Construction {
             tile.elevation = building.kind === 'baray' ? -1 : -0.8;
           } else if (building.kind === 'road' || building.kind === 'bridge')
             tile.terrain = building.kind;
-          else if (building.kind !== 'gate') tile.terrain = 'grass';
+          else if (building.kind !== 'gate' && !BUILDINGS[building.kind].onWater)
+            tile.terrain = 'grass';
           if (tile.terrain !== 'forest') tile.timber = 0;
         }
-        if (building.kind === 'house') state.population += 8;
+        state.population += BUILDINGS[building.kind].housing ?? 0;
         state.built[building.kind] = (state.built[building.kind] ?? 0) + 1;
       }
       building.construction = null;

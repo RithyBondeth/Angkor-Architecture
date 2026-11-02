@@ -26,10 +26,13 @@ export function productivity(state: GameState): number {
 export function housingCapacity(state: GameState): number {
   return (
     CONFIG.survival.baseHousing +
-    state.buildings.filter(
-      (b) => b.kind === 'house' && b.construction?.type !== 'build' && b.condition > 0,
-    ).length *
-      8
+    state.buildings.reduce(
+      (homes, b) =>
+        b.construction?.type !== 'build' && b.condition > 0
+          ? homes + (BUILDINGS[b.kind].housing ?? 0)
+          : homes,
+      0,
+    )
   );
 }
 export function floodDepth(state: GameState, b: Building): number {
@@ -37,6 +40,8 @@ export function floodDepth(state: GameState, b: Building): number {
 }
 export function floodTolerance(b: Building): number {
   if (b.kind === 'baray' || b.kind === 'canal' || b.kind === 'moat') return Infinity;
+  // Stilt houses, barges, and rafts ride the water instead of standing in it.
+  if (BUILDINGS[b.kind].onWater) return Infinity;
   if (['bridge', 'gate', 'dock'].includes(b.kind)) return 6;
   return b.kind === 'paddy' ? 1.2 : 0.8;
 }

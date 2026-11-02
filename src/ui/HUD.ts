@@ -330,6 +330,7 @@ export class HUD {
             button.dataset.cancelOnly === 'true'
               ? this.game.cancelConstruction(id)
               : this.game.demolish(id);
+          if (r.ok) this.audio.cue('demolish');
           this.root.querySelector<HTMLDialogElement>('dialog')!.close();
           this.selected = this.game.state.buildings.some((b) => b.id === id) ? id : null;
           this.renderer.focusBuilding(this.selected!);
@@ -407,6 +408,7 @@ export class HUD {
         if (action === 'toggle-building' && this.selected) this.game.toggleBuilding(this.selected);
         if (action === 'upgrade' && this.selected) {
           const r = this.game.upgrade(this.selected);
+          if (r.ok) this.audio.cue('upgrade');
           this.toast(r.message, !r.ok);
         }
         if (action === 'select-building') {
@@ -1237,6 +1239,7 @@ export class HUD {
     }
   }
   toast(message: string, error = false) {
+    if (error) this.audio.cue('invalid');
     const toast = this.root.querySelector<HTMLElement>('#toast')!;
     toast.innerHTML = `${icon(error ? 'warning-circle' : 'check-circle')}<span>${esc(message)}</span>`;
     toast.classList.toggle('error', error);

@@ -34,7 +34,11 @@ export type BuildingKind =
   | 'gopura'
   | 'pavilion'
   | 'elephant'
-  | 'facetower';
+  | 'facetower'
+  | 'stilthouse'
+  | 'fishery'
+  | 'royalbarge'
+  | 'lotusraft';
 export type Category =
   'all' | 'water' | 'production' | 'civic' | 'infrastructure' | 'decor' | 'wonder';
 export type Overlay = 'none' | 'water' | 'flow' | 'elevation' | 'logistics' | 'resources' | 'grid';
@@ -94,6 +98,10 @@ export interface BuildingDefinition {
   unlockMerit?: number;
   /** Decorations lift the mood of dwellings within reach; see simulation/Beauty. */
   appeal?: number;
+  /** Residents this building houses once complete. */
+  housing?: number;
+  /** Floats on open river or lake water instead of standing on land. */
+  onWater?: boolean;
 }
 export interface Courier {
   id: string;

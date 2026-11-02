@@ -114,7 +114,9 @@ export class Survival {
         });
     }
     state.population -= lost;
-    const ruinedHomes = state.buildings.some((b) => b.kind === 'house' && b.condition === 0);
+    const ruinedHomes = state.buildings.some(
+      (b) => !!BUILDINGS[b.kind].housing && b.condition === 0,
+    );
     const displaced = ruinedHomes
       ? Math.min(2, Math.max(0, state.population - housingCapacity(state)))
       : 0;

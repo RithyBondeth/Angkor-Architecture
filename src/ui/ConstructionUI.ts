@@ -58,9 +58,9 @@ export function removalDialog(b: Building, refund: Partial<Resources>, cancelOnl
           ? `The ${b.underlay.kind === 'moat' ? 'moat' : 'canal'} underneath will remain.`
           : b.kind === 'bridge'
             ? 'The waterway remains, but workers will lose this crossing.'
-            : b.kind === 'house' && b.construction?.type !== 'build'
+            : BUILDINGS[b.kind].housing && b.construction?.type !== 'build'
               ? b.condition > 0
-                ? 'Up to eight residents will leave. Available builders will be adjusted.'
+                ? `Up to ${BUILDINGS[b.kind].housing === 8 ? 'eight' : 'four'} residents will leave. Available builders will be adjusted.`
                 : 'Residents still without remaining housing will leave. Available builders will be adjusted.'
               : ['baray', 'moat', 'canal'].includes(b.kind)
                 ? 'Stored water remains on the map and may flood nearby land.'

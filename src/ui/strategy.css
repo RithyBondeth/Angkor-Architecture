@@ -125,7 +125,8 @@ summary:focus-visible {
   padding-right: 20px;
   border-right: 1px solid var(--border);
   font:
-    600 17px/1 'Fredoka',
+    600 17px/1 'Ubuntu',
+    'Bayon',
     sans-serif;
   letter-spacing: 3px;
   flex-shrink: 0;
@@ -133,8 +134,9 @@ summary:focus-visible {
 .game-brand small {
   display: block;
   font:
-    400 7px/1.5 'DM Sans',
-    sans-sans-serif;
+    400 7px/1.5 'Ubuntu',
+    'Bayon',
+    sans-serif;
   letter-spacing: 3.5px;
   margin-top: 5px;
 }
@@ -185,7 +187,8 @@ summary:focus-visible {
 }
 .command-bar .resource strong {
   font:
-    500 21px 'Fredoka',
+    500 21px 'Ubuntu',
+    'Bayon',
     sans-serif;
   letter-spacing: 0;
 }
@@ -222,7 +225,8 @@ summary:focus-visible {
 }
 .game-shell .world-heading h1 {
   font:
-    500 36px/1.1 'Fredoka',
+    500 36px/1.1 'Ubuntu',
+    'Bayon',
     sans-serif;
   letter-spacing: -0.5px;
   color: #315b36;
@@ -416,7 +420,8 @@ summary:focus-visible {
 }
 .game-shell .inspector h2 {
   font:
-    500 28px/1.12 'Fredoka',
+    500 28px/1.12 'Ubuntu',
+    'Bayon',
     sans-serif;
   margin: 8px 0 12px;
   letter-spacing: -0.3px;
@@ -622,7 +627,8 @@ summary:focus-visible {
 }
 .game-shell .build-tray-header h2 {
   font:
-    500 15px 'Fredoka',
+    500 15px 'Ubuntu',
+    'Bayon',
     sans-serif;
   gap: 10px;
 }
@@ -711,7 +717,8 @@ summary:focus-visible {
   text-overflow: ellipsis;
   color: var(--ink);
   font:
-    500 12px 'Fredoka',
+    500 12px 'Ubuntu',
+    'Bayon',
     sans-serif;
 }
 .game-shell .building-cost {
@@ -780,7 +787,7 @@ dialog::backdrop {
   backdrop-filter: blur(10px);
 }
 dialog h2 {
-  font-family: 'Fredoka', sans-serif;
+  font-family: 'Ubuntu', 'Bayon', sans-serif;
   font-weight: 500;
   font-size: 40px;
   line-height: 1.05;
@@ -810,7 +817,8 @@ dialog > p {
   border: 2px solid #91be6f;
   border-radius: 10px;
   font:
-    500 14px 'Fredoka',
+    500 14px 'Ubuntu',
+    'Bayon',
     sans-serif;
   box-shadow: 0 4px 0 var(--button-dark);
 }
@@ -1220,7 +1228,7 @@ dialog > p {
     padding: 28px 24px;
   }
   dialog h2 {
-    font-family: 'Fredoka', sans-serif;
+    font-family: 'Ubuntu', 'Bayon', sans-serif;
     font-weight: 500;
     font-size: 34px;
   }
@@ -1328,7 +1336,8 @@ dialog > p {
 .reservoir-history svg text {
   fill: var(--muted);
   font:
-    10px 'DM Sans',
+    10px 'Ubuntu',
+    'Bayon',
     sans-serif;
 }
 .reservoir-history svg polyline {
@@ -1723,7 +1732,8 @@ dialog > p {
 .outlook-card h3 {
   margin: 0 0 8px;
   font:
-    500 16px 'Fredoka',
+    500 16px 'Ubuntu',
+    'Bayon',
     sans-serif;
 }
 .outlook-card > strong {
@@ -1788,7 +1798,8 @@ dialog > p {
 }
 .celebration h2 {
   font:
-    500 22px/1.2 'Fredoka',
+    500 22px/1.2 'Ubuntu',
+    'Bayon',
     sans-serif;
   color: var(--ink);
   margin: 8px 0;
@@ -1829,7 +1840,8 @@ dialog > p {
 .legacy-stats dd {
   margin: 8px 0 0;
   font:
-    500 26px 'Fredoka',
+    500 26px 'Ubuntu',
+    'Bayon',
     sans-serif;
   color: var(--green);
 }

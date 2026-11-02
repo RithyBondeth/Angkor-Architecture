@@ -56,6 +56,14 @@ export const MODEL_KEYS = [
   'granary',
   'workshop',
   'warehouse',
+  'stilthouse',
+  'fishery',
+  'royalbarge',
+  'lotusraft',
+  'life-boat',
+  'life-egret',
+  'life-egret-fly',
+  'life-buffalo',
 ] as const;
 export type ModelKey = (typeof MODEL_KEYS)[number];
 
@@ -2109,7 +2117,242 @@ function warehouse(g: Group) {
   oxCart(g, [-0.2, y, 0.62], 0.2);
 }
 
+// ---------- On the water ----------
+function stilthouseModel(g: Group) {
+  // Tall stilts rise from the river; a boat waits at the ladder.
+  for (const [x, z] of [
+    [-0.3, -0.25],
+    [0.3, -0.25],
+    [-0.3, 0.25],
+    [0.3, 0.25],
+  ] as [number, number][]) {
+    cyl(g, 0.03, 0.035, 0.3, [x, -0.16, z], mat('#5e4128', { shine: 10 }), 8);
+    ring(g, 0.05, 0.008, [x, -0.04, z], mat('#bfe9ef', { shine: 80 }));
+  }
+  stiltHouse(g, [0, -0.06, 0], 0.72, '#9a6a3a', '#c9a06a');
+  boat(g, [0.05, -0.04, 0.48], 0.2);
+  tube(
+    g,
+    [
+      [-0.42, -0.04, 0.3],
+      [-0.42, 0.5, 0.3],
+    ],
+    0.01,
+    mat('#8a5a34'),
+  );
+  const net = rbox(
+    g,
+    [0.01, 0.22, 0.22],
+    [-0.42, 0.24, 0.42],
+    mat('#d9cfa8', { shine: 10, opacity: 0.7, side: 'double' }),
+    0.002,
+  );
+  net.castShadow = false;
+}
+function fisheryModel(g: Group) {
+  const y = pad(g, 2, 'earth', '#a0845c');
+  const deck = mat('#a8703f', { map: tex.planks('#a8703f'), shine: 20 });
+  rbox(g, [0.4, 0.05, 1.3], [0.62, y + 0.06, 0.1], deck, 0.01);
+  rbox(g, [1.0, 0.05, 0.36], [0.2, y + 0.06, 0.72], deck, 0.01);
+  for (const [x, z] of [
+    [0.45, -0.5],
+    [0.8, -0.5],
+    [0.8, 0.7],
+    [0.45, 0.7],
+    [-0.25, 0.85],
+    [0.65, 0.85],
+  ] as [number, number][])
+    cyl(g, 0.025, 0.03, 0.2, [x, y - 0.05, z], mat('#6b4428'), 8);
+  stiltHouse(g, [-0.42, y, -0.38], 0.52, '#c4562f');
+  // Conical bamboo fish traps and a drying rack of fish.
+  for (const [x, z] of [
+    [-0.1, 0.35],
+    [0.05, 0.42],
+    [-0.22, 0.48],
+  ] as [number, number][]) {
+    const trap = cone(g, 0.07, 0.2, [x, y, z], mat('#c9a35a', { shine: 15, flat: true }), 10);
+    trap.rotation.z = Math.PI / 2.2;
+  }
+  for (const x of [-0.6, -0.1]) cyl(g, 0.012, 0.012, 0.36, [x, y, 0.05], mat('#8a5a34'), 6);
+  tube(
+    g,
+    [
+      [-0.6, y + 0.34, 0.05],
+      [-0.1, y + 0.34, 0.05],
+    ],
+    0.008,
+    mat('#8a5a34'),
+  );
+  for (let i = 0; i < 6; i++)
+    ball(
+      g,
+      0.03,
+      [-0.55 + i * 0.08, y + 0.26, 0.05],
+      mat('#c9d2d6', { shine: 70 }),
+      [0.6, 1.6, 0.5],
+      8,
+    );
+  farmer(g, [0.62, y + 0.08, -0.3], '#3f6fa8');
+  boat(g, [0.95, y - 0.02, 0.35], Math.PI / 2);
+}
+function royalBargeModel(g: Group) {
+  const b = new Group();
+  g.add(b);
+  const lacquer = mat('#b8302a', { shine: 60 });
+  const hull = capsule(b, 0.18, 1.4, [0, 0.02, 0], lacquer, [0, 0, Math.PI / 2]);
+  hull.scale.set(1, 0.42, 0.7);
+  rbox(
+    b,
+    [1.5, 0.04, 0.22],
+    [0, 0.1, 0],
+    mat('#a8703f', { map: tex.planks('#a8703f'), shine: 30 }),
+    0.01,
+  );
+  rbox(b, [1.6, 0.03, 0.26], [0, 0.07, 0], GOLD(), 0.01);
+  // A naga prow rising from the bow, its tail curling up at the stern.
+  tube(
+    b,
+    [
+      [0.8, 0.06, 0],
+      [0.98, 0.2, 0],
+      [1.02, 0.45, 0],
+      [0.96, 0.58, 0],
+    ],
+    0.05,
+    GOLD(),
+  );
+  nagaHeadFan(b, [0.95, 0.45, 0], Math.PI);
+  tube(
+    b,
+    [
+      [-0.8, 0.06, 0],
+      [-0.95, 0.25, 0],
+      [-0.9, 0.42, 0],
+      [-0.82, 0.46, 0],
+    ],
+    0.04,
+    GOLD(),
+  );
+  // Golden pavilion amidships.
+  for (const [x, z] of [
+    [-0.18, -0.08],
+    [0.18, -0.08],
+    [-0.18, 0.08],
+    [0.18, 0.08],
+  ] as [number, number][])
+    cyl(b, 0.012, 0.012, 0.28, [x, 0.12, z], GOLD(), 8);
+  roof(b, 0.46, 0.28, 0.14, [0, 0.4, 0], '#c8452f', '#f0c25a');
+  for (let i = 0; i < 5; i++)
+    for (const side of [-1, 1]) {
+      const x = -0.6 + i * 0.3;
+      if (Math.abs(x) < 0.25) continue;
+      villager(b, [x, 0.12, side * 0.08], side > 0 ? '#c4553a' : '#3f6fa8');
+      tube(
+        b,
+        [
+          [x, 0.22, side * 0.1],
+          [x - 0.08, -0.02, side * 0.32],
+        ],
+        0.008,
+        mat('#8a5a34'),
+      );
+    }
+  for (const x of [-0.45, 0.45]) {
+    cyl(b, 0.008, 0.008, 0.4, [x, 0.12, 0], GOLD(), 6);
+    cone(b, 0.1, 0.04, [x, 0.52, 0], mat('#f2c13a', { shine: 40 }), 12);
+  }
+}
+function lotusRaftModel(g: Group) {
+  const bamboo = mat('#c9b46a', { shine: 35 });
+  for (let i = 0; i < 6; i++) {
+    const log = cyl(g, 0.045, 0.045, 0.7, [0, -0.02, -0.25 + i * 0.1], bamboo, 10);
+    log.rotation.z = Math.PI / 2;
+    log.position.y = 0.0;
+  }
+  for (const x of [-0.25, 0.25])
+    tube(
+      g,
+      [
+        [x, 0.04, -0.3],
+        [x, 0.04, 0.3],
+      ],
+      0.012,
+      mat('#8a6a3a'),
+    );
+  for (const [x, z] of [
+    [-0.15, -0.12],
+    [0.15, 0.05],
+    [-0.05, 0.18],
+  ] as [number, number][]) {
+    pot(g, [x, 0.04, z], '#a8573a', 0.9);
+    lotus(g, [x, 0.2, z], 0.07);
+  }
+  for (const [x, z] of [
+    [0.2, -0.18],
+    [-0.22, 0.2],
+  ] as [number, number][]) {
+    ball(g, 0.035, [x, 0.08, z], mat('#ffd36b', { emissive: '#ffb43a', glow: 0.8 }));
+    glowSprite(g, [x, 0.1, z], 0.28);
+  }
+}
+function lifeBoat(g: Group) {
+  boat(g, [0, 0, 0], 0);
+  ball(g, 0.12, [0, -0.01, 0], mat('#bfe9ef', { opacity: 0.35 }), [2.4, 0.05, 1.2], 16);
+}
+function egret(g: Group, flying: boolean) {
+  const white = mat('#fbfaf4', { shine: 40 });
+  const leg = mat('#2a2622');
+  if (!flying) {
+    for (const z of [-0.025, 0.025]) cyl(g, 0.006, 0.006, 0.22, [0, 0, z], leg, 6);
+    ring(g, 0.06, 0.006, [0, 0.002, 0], mat('#bfe9ef', { shine: 80 }));
+  }
+  const y = flying ? 0 : 0.22;
+  ball(g, 0.07, [0, y + 0.06, 0], white, [1.5, 0.9, 0.9]);
+  tube(
+    g,
+    [
+      [0.08, y + 0.08, 0],
+      [0.11, y + 0.2, 0],
+      [0.07, y + 0.27, 0],
+      [0.12, y + 0.31, 0],
+    ],
+    0.018,
+    white,
+  );
+  ball(g, 0.028, [0.13, y + 0.32, 0], white);
+  cone(g, 0.009, 0.08, [0.15, y + 0.31, 0], mat('#f2c13a', { shine: 40 }), 6).rotation.z =
+    -Math.PI / 2;
+  tube(
+    g,
+    [
+      [-0.1, y + 0.06, 0],
+      [-0.17, y + 0.03, 0],
+    ],
+    0.012,
+    white,
+  );
+  if (flying)
+    for (const side of [-1, 1]) {
+      const wing = ball(g, 0.16, [0, y + 0.1, side * 0.16], white, [0.6, 0.08, 1.3], 12);
+      wing.rotation.x = side * -0.35;
+    }
+}
+function lifeBuffalo(g: Group) {
+  waterBuffalo(g, [0, -0.1, 0], 0.4);
+  // The river line hides the legs; ripples ring the body.
+  ball(g, 0.34, [0, 0.04, 0], mat('#3fa6b8', { shine: 90 }), [1.2, 0.04, 0.85], 24);
+  ring(g, 0.3, 0.008, [0, 0.06, 0], mat('#d9f6f2', { shine: 80 }));
+}
+
 const BUILDERS: Record<ModelKey, (g: Group) => void> = {
+  stilthouse: stilthouseModel,
+  fishery: fisheryModel,
+  royalbarge: royalBargeModel,
+  lotusraft: lotusRaftModel,
+  'life-boat': lifeBoat,
+  'life-egret': (g) => egret(g, false),
+  'life-egret-fly': (g) => egret(g, true),
+  'life-buffalo': lifeBuffalo,
   baray,
   paddy,
   quarry,

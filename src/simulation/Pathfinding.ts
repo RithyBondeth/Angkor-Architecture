@@ -78,6 +78,7 @@ export function traversable(
       [
         'paddy',
         'dock',
+        'fishery',
         'house',
         'lumber',
         'quarry',
