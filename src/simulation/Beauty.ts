@@ -5,7 +5,7 @@ import { siteDistance } from './Deposits';
 /** Decorations count only when a completed dwelling lives within this many tiles. */
 export const BEAUTY_REACH = 4;
 /** Beauty beyond this adds nothing; a few well-placed pieces are enough. */
-export const BEAUTY_CAP = 30;
+export const BEAUTY_CAP = 50;
 /** At or above this, fed residents settle every second day instead of every third. */
 export const BEAUTY_GROWTH_THRESHOLD = 10;
 

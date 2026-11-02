@@ -6,6 +6,7 @@ import '@fontsource/fredoka/500.css';
 import '@fontsource/fredoka/600.css';
 import '@fontsource/cormorant-garamond/500.css';
 import '@fontsource/cormorant-garamond/600.css';
+import '@fontsource/moul/khmer-400.css';
 import '@phosphor-icons/web/regular/style.css';
 import './ui/styles.css';
 import { OfflineApp } from './pwa/OfflineApp';

@@ -148,7 +148,21 @@ export function box(
   }
   c.restore();
   if (w < 6) return;
-  // A sunlit rim on the top edges and a soft ink silhouette give every block a crisp cartoon read.
+  // Glossy top: a soft sheen across the upper face, then a bright bevel on its front edges.
+  c.save();
+  c.beginPath();
+  c.moveTo(x, y - d - h);
+  c.lineTo(x + w, y - h);
+  c.lineTo(x, y + d - h);
+  c.lineTo(x - w, y - h);
+  c.closePath();
+  c.clip();
+  const sheen = c.createLinearGradient(x - w, y - d - h, x + w * 0.4, y + d - h);
+  sheen.addColorStop(0, '#fffbe84a');
+  sheen.addColorStop(0.55, '#fffbe800');
+  c.fillStyle = sheen;
+  c.fillRect(x - w, y - d - h, w * 2, d * 2);
+  c.restore();
   line(
     c,
     [
@@ -156,7 +170,16 @@ export function box(
       [x, y + d - h],
       [x + w, y - h],
     ],
-    '#fff8e070',
+    '#fffbe8a8',
+    1.3,
+  );
+  line(
+    c,
+    [
+      [x, y + d - h],
+      [x, y + d],
+    ],
+    '#fff3d055',
     1,
   );
   polygon(
@@ -170,7 +193,25 @@ export function box(
       [x - w, y],
     ],
     'transparent',
-    '#3b2c1a3a',
+    '#2a1a0c80',
+    1.5,
+  );
+}
+
+/** A raised stone-edged pad that grounds a piece, like a plinth on the lawn. */
+export function pad(c: Ctx, w: number, d: number, stone = '#d9cba5', lawn = '#a9d07c') {
+  ellipse(c, 0, 10, w * 1.04, d * 1.04, '#22301a30');
+  box(c, 0, 6, w, d, 6, stone, shade(stone, -0.18), shade(stone, -0.32));
+  polygon(
+    c,
+    [
+      [0, -d + 4],
+      [w - 7, 0],
+      [0, d - 4],
+      [-w + 7, 0],
+    ],
+    lawn,
+    shade(lawn, -0.35),
     1,
   );
 }

@@ -3,7 +3,7 @@ import { completedBuilding } from '../src/core/buildingState';
 import { createWorld } from '../src/core/world';
 import { readGameState } from '../src/core/Persistence';
 import { Game } from '../src/core/Game';
-import { BUILDINGS, DECOR_KINDS } from '../src/data/buildings';
+import { APPEAL_KINDS, BUILDINGS, DECOR_KINDS, WONDER_KINDS } from '../src/data/buildings';
 import {
   BEAUTY_CAP,
   beauty,
@@ -45,6 +45,28 @@ describe('decorations', () => {
     }
   });
 
+  it('include statues and wonders, with the grandest unlocked by merit', () => {
+    expect(WONDER_KINDS).toEqual([
+      'parasol',
+      'brazier',
+      'gong',
+      'singha',
+      'gopura',
+      'pavilion',
+      'elephant',
+      'facetower',
+    ]);
+    expect(APPEAL_KINDS).toHaveLength(14);
+    for (const kind of WONDER_KINDS) {
+      expect(BUILDINGS[kind].workers).toBe(0);
+      expect(BUILDINGS[kind].appeal).toBeGreaterThan(0);
+    }
+    expect(BUILDINGS.facetower.unlockMerit).toBeGreaterThan(BUILDINGS.pavilion.unlockMerit!);
+    expect(BUILDINGS.facetower.appeal).toBe(
+      Math.max(...APPEAL_KINDS.map((k) => BUILDINGS[k].appeal!)),
+    );
+  });
+
   it('count only near a standing dwelling', () => {
     const s = world();
     const garden = add(s, 'garden', 10, 10);
@@ -73,7 +95,17 @@ describe('decorations', () => {
     };
     expect(beauty(s)).toBe(0);
     pond.construction = null;
-    for (let i = 0; i < 6; i++) add(s, 'market', 8 + (i % 3) * 2, 13 + Math.floor(i / 3) * 2);
+    for (const [x, y] of [
+      [14, 10],
+      [12, 8],
+      [12, 12],
+      [10, 12],
+      [8, 12],
+      [8, 10],
+      [8, 8],
+      [10, 8],
+    ])
+      add(s, 'market', x!, y!);
     expect(beauty(s)).toBe(BEAUTY_CAP);
   });
 
