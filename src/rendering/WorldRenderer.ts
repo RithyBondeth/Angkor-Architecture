@@ -18,10 +18,20 @@ import { constructionSite } from './ConstructionSite';
 import { floodUnsafe } from '../simulation/survivalRules';
 import type { Game } from '../core/Game';
 import { Camera } from './Camera';
-import { TextureAtlas } from './TextureAtlas';
+import { TextureAtlas, TILE_FRAME } from './TextureAtlas';
 import { Effects } from './Effects';
 import { TREE_VARIANTS } from './natureArt';
 import { toGrid, toScreen } from './isometric';
+
+const THEME_COLORS: Partial<Record<BuildingKind, number[]>> = {
+  brazier: [0xff6a1a, 0xffb43a, 0xfff2a8],
+  lotuspond: [0xf6b7cf, 0xe98bb0, 0xffffff],
+  garden: [0xfff7ee, 0xf27aa6, 0xffd45c],
+  pavilion: [0xf59bc0, 0xf4c54d, 0xc8352b],
+  parasol: [0xc8352b, 0xf4c54d],
+  gong: [0xf4c54d, 0xfff0a6, 0xe9b23f],
+  market: [0xe3553f, 0x2fa3a0, 0xf2b632],
+};
 
 export class WorldRenderer {
   readonly app = new Application();
@@ -63,6 +73,7 @@ export class WorldRenderer {
   private ghostBaseY = 0;
   private initialized = false;
   private nextAmbient = 0;
+  private nextEmber = 0;
   onRoutePreview: (preview: RoutePreview | null) => void = () => {};
   onPreview: (message: string, ok: boolean, advice: SiteAdvice[]) => void = () => {};
   onResource: (message: string) => void = () => {};
@@ -109,12 +120,12 @@ export class WorldRenderer {
     for (const tile of this.game.state.tiles) {
       const pos = toScreen(tile.x, tile.y);
       const sprite = new Sprite(this.atlas.get(`${tile.terrain}-${tile.variant}`));
-      sprite.anchor.set(0.5, 18 / 56);
+      sprite.anchor.set(0.5, TILE_FRAME.originY / TILE_FRAME.height);
       sprite.position.set(pos.x, pos.y);
       this.ground.addChild(sprite);
       this.tileSprites.push(sprite);
       const water = new Sprite(this.atlas.get(`flood-${tile.variant}`));
-      water.anchor.set(0.5, 18 / 56);
+      water.anchor.set(0.5, TILE_FRAME.originY / TILE_FRAME.height);
       water.position.set(pos.x, pos.y - 0.4);
       water.alpha = 0;
       this.ground.addChild(water);
@@ -461,6 +472,14 @@ export class WorldRenderer {
     this.sync();
     const sprite = id ? (this.buildingSprites.get(id) ?? this.sites.get(id)?.view) : null;
     if (changed && sprite) this.effects.bounce(sprite);
+    const b = this.game.state.buildings.find((b) => b.id === id);
+    if (changed && b && !b.construction && BUILDINGS[b.kind].appeal) {
+      // Decorations answer a tap with a little themed flourish.
+      const size = BUILDINGS[b.kind].size;
+      const p = toScreen(b.x + (size - 1) / 2, b.y + (size - 1) / 2);
+      const colors = THEME_COLORS[b.kind] ?? [0xffd66b, 0xfff4c2, 0xf59bc0];
+      this.effects.burst(p.x, p.y - 40 * size, colors, 10 + size * 4, 40 + size * 12);
+    }
   }
   /** Sparkles and a springy settle when construction, an upgrade, or a repair finishes. */
   private celebrate(id: string) {
@@ -506,6 +525,14 @@ export class WorldRenderer {
         .moveTo(p.x + ox - 4, p.y + oy + 1)
         .lineTo(p.x + ox + 4, p.y + oy - 1)
         .stroke({ color: 0xffffff, width: 1.4, alpha });
+    }
+    if (now >= this.nextEmber) {
+      this.nextEmber = now + 110;
+      for (const b of this.game.state.buildings)
+        if (b.kind === 'brazier' && !b.construction && b.condition > 0) {
+          const p = toScreen(b.x, b.y);
+          this.effects.ember(p.x, p.y - 44);
+        }
     }
     if (now < this.nextAmbient) return;
     this.nextAmbient = now + 900 + Math.random() * 900;
@@ -837,6 +864,6 @@ export class WorldRenderer {
     this.camera.destroy();
     this.effects.destroy();
     this.app.destroy(true, { children: true });
-    this.atlas.texture.destroy(true);
+    this.atlas.destroy();
   }
 }

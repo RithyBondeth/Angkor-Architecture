@@ -146,6 +146,24 @@ export class Effects {
       fade: 1,
     });
   }
+  /** A single spark leaping from a flame. */
+  ember(x: number, y: number) {
+    if (!this.enabled) return;
+    const color = Math.random() < 0.5 ? 0xffb43a : 0xff6a1a;
+    const view = new Graphics()
+      .circle(0, 0, 2.6)
+      .fill({ color, alpha: 0.35 })
+      .circle(0, 0, 1.1)
+      .fill({ color: 0xfff2a8 });
+    this.spawn(view, {
+      duration: 600 + Math.random() * 500,
+      x: x + (Math.random() - 0.5) * 10,
+      y,
+      vx: (Math.random() - 0.5) * 0.02,
+      vy: -0.035 - Math.random() * 0.02,
+      fade: 1,
+    });
+  }
   /** Gentle rising fireflies around a decoration. */
   glow(x: number, y: number, color = 0xffe68a) {
     if (!this.enabled) return;

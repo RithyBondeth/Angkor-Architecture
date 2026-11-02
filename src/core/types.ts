@@ -26,8 +26,17 @@ export type BuildingKind =
   | 'lotuspond'
   | 'naga'
   | 'shrine'
-  | 'market';
-export type Category = 'all' | 'water' | 'production' | 'civic' | 'infrastructure' | 'decor';
+  | 'market'
+  | 'singha'
+  | 'parasol'
+  | 'brazier'
+  | 'gong'
+  | 'gopura'
+  | 'pavilion'
+  | 'elephant'
+  | 'facetower';
+export type Category =
+  'all' | 'water' | 'production' | 'civic' | 'infrastructure' | 'decor' | 'wonder';
 export type Overlay = 'none' | 'water' | 'flow' | 'elevation' | 'logistics' | 'resources' | 'grid';
 export interface Point {
   x: number;

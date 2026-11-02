@@ -1,13 +1,51 @@
-import { Rectangle, Texture } from 'pixi.js';
-import type { BuildingKind, Terrain } from '../core/types';
+import { CanvasSource, Rectangle, Texture } from 'pixi.js';
+import type { BuildingKind } from '../core/types';
 import { BUILDINGS } from '../data/buildings';
 import { box, ellipse, line, polygon } from './draw';
 import type { Ctx, Vertex } from './draw';
 import { decor, dwelling } from './decorArt';
+import { wonder } from './wonderArt';
+import { FRAMES, ModelStudio } from './models/studio';
+import type { Frame } from './models/studio';
+import { buildTile } from './models/terrain';
+import type { TileKind } from './models/terrain';
+import { buildTree } from './models/trees';
+import type { Group } from 'three';
+import { buildModel, MODEL_KEYS } from './models/models';
+import type { ModelKey } from './models/models';
+
+function isModel(key: string): key is ModelKey {
+  return (MODEL_KEYS as readonly string[]).includes(key);
+}
 import { lotusFlower, tile, tree, TREE_VARIANTS } from './natureArt';
 
-const ATLAS_WIDTH = 2048;
-const ATLAS_HEIGHT = 2560;
+const PAGE_SIZE = 2048;
+/** Dock and inspector pictures, drawn at twice their largest display size. */
+const THUMB = { width: 384, height: 320 };
+const TILE_KINDS: TileKind[] = [
+  'grass',
+  'forest',
+  'water',
+  'canal',
+  'moat',
+  'reservoir',
+  'road',
+  'bridge',
+  'flood',
+];
+/** Tile sprites: 80 × 72 with the top diamond centred at (40, 34). */
+export const TILE_FRAME = { width: 80, height: 72, originY: 34 };
+
+/** One canvas of sprites. Hi-res pages hold terrain and trees at 2× for crisp zoomed views. */
+interface Page {
+  canvas: HTMLCanvasElement;
+  context: Ctx;
+  resolution: number;
+  x: number;
+  y: number;
+  rowHeight: number;
+  source?: CanvasSource;
+}
 function tower(c: Ctx, x: number, y: number, scale = 1) {
   c.save();
   c.translate(x, y);
@@ -107,37 +145,96 @@ function tower(c: Ctx, x: number, y: number, scale = 1) {
 }
 /** Every scene sprite shares one GPU texture. Artwork is generated once at startup. */
 export class TextureAtlas {
-  private readonly canvas = document.createElement('canvas');
-  private readonly context: Ctx;
-  private readonly frames = new Map<string, Rectangle>();
+  private readonly pages: Page[] = [];
+  private readonly frames = new Map<string, { page: Page; frame: Rectangle }>();
   private readonly thumbnails = new Map<string, string>();
   private readonly textures = new Map<string, Texture>();
-  private x = 0;
-  private y = 0;
-  private rowHeight = 0;
-  readonly texture: Texture;
+  private hiRes: HTMLCanvasElement | null = null;
   constructor() {
-    this.canvas.width = ATLAS_WIDTH;
-    this.canvas.height = ATLAS_HEIGHT;
-    this.context = this.canvas.getContext('2d', { willReadFrequently: true })!;
-    for (const terrain of [
-      'grass',
-      'forest',
-      'water',
-      'canal',
-      'moat',
-      'reservoir',
-      'road',
-      'bridge',
-      'flood',
-    ] as (Terrain | 'flood')[])
-      for (let v = 0; v < 5; v++) this.add(`${terrain}-${v}`, 80, 56, (c) => tile(c, terrain, v));
-    for (let v = 0; v < TREE_VARIANTS; v++) this.add(`tree-${v}`, 128, 160, (c) => tree(c, v));
+    // Terrain, trees, homes, decorations, and wonders are rendered in 3D when WebGL allows;
+    // the painted versions stand in otherwise.
+    const studio = ModelStudio.create();
+    const render3d =
+      (make: () => Group, frame: Frame, width: number, height: number, paint: (c: Ctx) => void) =>
+      (c: Ctx) => {
+        if (!studio) return paint(c);
+        try {
+          const rendered = studio.render(make(), frame);
+          c.drawImage(rendered, 0, 0, width, height);
+          this.keepHiRes(rendered);
+        } catch {
+          paint(c);
+        }
+      };
+    for (const terrain of TILE_KINDS)
+      for (let v = 0; v < 5; v++)
+        this.add(
+          `${terrain}-${v}`,
+          TILE_FRAME.width,
+          TILE_FRAME.height,
+          render3d(
+            () => {
+              const { group, extra } = buildTile(terrain, v);
+              group.userData.dispose = extra;
+              return group;
+            },
+            FRAMES.tile,
+            TILE_FRAME.width,
+            TILE_FRAME.height,
+            (c) => {
+              c.translate(0, TILE_FRAME.originY - 18);
+              tile(c, terrain, v);
+            },
+          ),
+          2,
+        );
+    for (let v = 0; v < TREE_VARIANTS; v++)
+      this.add(
+        `tree-${v}`,
+        128,
+        160,
+        render3d(
+          () => buildTree(v),
+          FRAMES.tree,
+          128,
+          160,
+          (c) => tree(c, v),
+        ),
+        2,
+      );
+    const sprite = (key: ModelKey, size: number, paint: (c: Ctx) => void) =>
+      render3d(() => buildModel(key), FRAMES.building(size), 384, 320, paint);
     for (const kind of Object.keys(BUILDINGS) as BuildingKind[])
-      this.add(kind, 384, 320, (c) => this.building(c, kind));
-    this.add('house-b', 384, 320, (c) => this.building(c, 'house', 3, true));
-    this.add('temple-towers', 384, 320, (c) => this.building(c, 'temple', 2));
-    this.add('temple-foundation', 384, 320, (c) => this.building(c, 'temple', 1));
+      this.add(
+        kind,
+        384,
+        320,
+        isModel(kind)
+          ? // The bridge is drawn at full size rather than the 0.72 used for other 1 × 1 sprites.
+            sprite(kind, kind === 'bridge' ? 2 : BUILDINGS[kind].size, (c) =>
+              this.building(c, kind),
+            )
+          : (c) => this.building(c, kind),
+      );
+    this.add(
+      'house-b',
+      384,
+      320,
+      sprite('house-b', 2, (c) => this.building(c, 'house', 3, true)),
+    );
+    this.add(
+      'temple-towers',
+      384,
+      320,
+      sprite('temple-towers', 4, (c) => this.building(c, 'temple', 2)),
+    );
+    this.add(
+      'temple-foundation',
+      384,
+      320,
+      sprite('temple-foundation', 4, (c) => this.building(c, 'temple', 1)),
+    );
+    studio?.dispose();
     this.add('worker', 32, 48, (c) => {
       ellipse(c, 16, 42, 7, 3, '#3f4a3540');
       line(
@@ -218,23 +315,44 @@ export class TextureAtlas {
       );
       ellipse(c, 78, 12, 4, 5, '#b58c5c');
     });
-    this.texture = Texture.from(this.canvas);
+    for (const page of this.pages)
+      page.source = new CanvasSource({ resource: page.canvas, resolution: page.resolution });
   }
   get(key: string): Texture {
     const cached = this.textures.get(key);
     if (cached) return cached;
-    const frame = this.frames.get(key);
-    if (!frame) throw new Error(`Missing atlas frame: ${key}`);
-    const texture = new Texture({ source: this.texture.source, frame });
+    const entry = this.frames.get(key);
+    if (!entry) throw new Error(`Missing atlas frame: ${key}`);
+    const texture = new Texture({ source: entry.page.source!, frame: entry.frame });
     this.textures.set(key, texture);
     return texture;
+  }
+  destroy() {
+    for (const texture of this.textures.values()) texture.destroy();
+    for (const page of this.pages) page.source?.destroy();
   }
   thumbnail(key: string) {
     return this.thumbnails.get(key) ?? '';
   }
   /** Crop the drawn artwork (not the empty frame) so small and large pieces read alike. */
-  private thumbnailOf(width: number, height: number) {
-    const pixels = this.context.getImageData(this.x, this.y, width, height).data;
+  /** Copy a 3D render before the studio reuses its canvas, so thumbnails come from full detail. */
+  private keepHiRes(source: HTMLCanvasElement) {
+    const copy = document.createElement('canvas');
+    copy.width = source.width;
+    copy.height = source.height;
+    copy.getContext('2d', { willReadFrequently: true })!.drawImage(source, 0, 0);
+    this.hiRes = copy;
+  }
+  /** Crop the drawn artwork (not the empty frame) so small and large pieces read alike. */
+  private thumbnailOf(
+    source: HTMLCanvasElement,
+    sx: number,
+    sy: number,
+    width: number,
+    height: number,
+    density: number,
+  ) {
+    const pixels = source.getContext('2d')!.getImageData(sx, sy, width, height).data;
     let left = width,
       top = height,
       right = 0,
@@ -248,53 +366,81 @@ export class TextureAtlas {
           bottom = Math.max(bottom, y);
         }
     const thumb = document.createElement('canvas');
-    thumb.width = 192;
-    thumb.height = 160;
+    thumb.width = THUMB.width;
+    thumb.height = THUMB.height;
     if (right <= left) return thumb.toDataURL('image/png');
-    const pad = 6;
+    const pad = 6 * density;
     const w = right - left + 1 + pad * 2;
     const h = bottom - top + 1 + pad * 2;
-    const scale = Math.min(192 / w, 160 / h, 2.4);
-    thumb
-      .getContext('2d')!
-      .drawImage(
-        this.canvas,
-        this.x + left - pad,
-        this.y + top - pad,
-        w,
-        h,
-        (192 - w * scale) / 2,
-        160 - h * scale,
-        w * scale,
-        h * scale,
-      );
+    // Small pieces may be enlarged, but never beyond the detail the source holds.
+    const scale = Math.min(THUMB.width / w, THUMB.height / h, (2.4 * 2) / density);
+    const context = thumb.getContext('2d')!;
+    context.imageSmoothingQuality = 'high';
+    context.drawImage(
+      source,
+      sx + left - pad,
+      sy + top - pad,
+      w,
+      h,
+      (THUMB.width - w * scale) / 2,
+      THUMB.height - h * scale,
+      w * scale,
+      h * scale,
+    );
     return thumb.toDataURL('image/png');
   }
-  private add(key: string, width: number, height: number, draw: (c: Ctx) => void) {
-    if (this.x + width > ATLAS_WIDTH) {
-      this.x = 0;
-      this.y += this.rowHeight + 2;
-      this.rowHeight = 0;
+  private page(resolution: number, width: number, height: number): Page {
+    let page = [...this.pages].reverse().find((p) => p.resolution === resolution);
+    if (page && page.x + width > PAGE_SIZE) {
+      page.x = 0;
+      page.y += page.rowHeight + 2;
+      page.rowHeight = 0;
     }
-    if (this.y + height > ATLAS_HEIGHT) throw new Error('Texture atlas overflow');
-    this.context.save();
-    this.context.translate(this.x, this.y);
+    if (!page || page.y + height > PAGE_SIZE) {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = PAGE_SIZE;
+      const context = canvas.getContext('2d', { willReadFrequently: true })!;
+      page = { canvas, context, resolution, x: 0, y: 0, rowHeight: 0 };
+      this.pages.push(page);
+    }
+    return page;
+  }
+  /** Paint a sprite of logical size width × height; `resolution` 2 stores it at double density. */
+  private add(key: string, width: number, height: number, draw: (c: Ctx) => void, resolution = 1) {
+    const w = width * resolution;
+    const h = height * resolution;
+    const page = this.page(resolution, w, h);
+    const c = page.context;
+    c.save();
+    c.translate(page.x, page.y);
     // Keep each painter inside its own frame so neighbours never bleed into a sprite.
-    this.context.beginPath();
-    this.context.rect(0, 0, width, height);
-    this.context.clip();
-    draw(this.context);
-    this.context.restore();
-    this.frames.set(key, new Rectangle(this.x, this.y, width, height));
+    c.beginPath();
+    c.rect(0, 0, w, h);
+    c.clip();
+    c.scale(resolution, resolution);
+    draw(c);
+    c.restore();
+    this.frames.set(key, {
+      page,
+      frame: new Rectangle(page.x / resolution, page.y / resolution, width, height),
+    });
+    const hiRes = this.hiRes;
+    this.hiRes = null;
     if (width === 384 && key in BUILDINGS)
-      this.thumbnails.set(key, this.thumbnailOf(width, height));
-    this.x += width + 2;
-    this.rowHeight = Math.max(this.rowHeight, height);
+      this.thumbnails.set(
+        key,
+        hiRes
+          ? this.thumbnailOf(hiRes, 0, 0, hiRes.width, hiRes.height, hiRes.width / width)
+          : this.thumbnailOf(page.canvas, page.x, page.y, w, h, resolution),
+      );
+    page.x += w + 2;
+    page.rowHeight = Math.max(page.rowHeight, h);
   }
   private building(c: Ctx, kind: BuildingKind, level = 3, alternate = false) {
     c.save();
     c.translate(192, 252);
     if (BUILDINGS[kind].category === 'decor') decor(c, kind);
+    else if (BUILDINGS[kind].category === 'wonder') wonder(c, kind);
     else if (kind === 'house' && alternate) {
       box(c, 0, 8, 64, 32, 3, '#bbd28a', '#95b76c', '#80a362');
       for (let i = 0; i < 3; i++) {
