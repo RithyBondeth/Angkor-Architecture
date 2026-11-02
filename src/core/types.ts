@@ -20,8 +20,14 @@ export type BuildingKind =
   | 'workshop'
   | 'warehouse'
   | 'lateritepit'
-  | 'moat';
-export type Category = 'all' | 'water' | 'production' | 'civic' | 'infrastructure';
+  | 'moat'
+  | 'garden'
+  | 'palmgrove'
+  | 'lotuspond'
+  | 'naga'
+  | 'shrine'
+  | 'market';
+export type Category = 'all' | 'water' | 'production' | 'civic' | 'infrastructure' | 'decor';
 export type Overlay = 'none' | 'water' | 'flow' | 'elevation' | 'logistics' | 'resources' | 'grid';
 export interface Point {
   x: number;
@@ -77,6 +83,8 @@ export interface BuildingDefinition {
   builders: number;
   production?: { resource: Resource; amount: number };
   unlockMerit?: number;
+  /** Decorations lift the mood of dwellings within reach; see simulation/Beauty. */
+  appeal?: number;
 }
 export interface Courier {
   id: string;

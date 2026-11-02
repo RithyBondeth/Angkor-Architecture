@@ -219,6 +219,12 @@ export class AudioEngine {
       this.tone(380, 0.025, 0.07, 'sine', 0.08, 210);
     }
   }
+  playCompletion(): void {
+    if (!this.canCue('completion', 0.6)) return;
+    this.tone(523, 0, 0.12, 'sine', 0.09);
+    this.tone(659, 0.08, 0.12, 'sine', 0.08);
+    this.tone(784, 0.16, 0.24, 'triangle', 0.08);
+  }
   playDelivery(mode: 'worker' | 'barge'): void {
     if (!this.playing || !this.canCue('delivery', 0.7)) return;
     const base = mode === 'barge' ? 330 : 660;

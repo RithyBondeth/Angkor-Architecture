@@ -5,5 +5,6 @@ import type { BuildingKind, Resource } from './types';
 export type GameEvent =
   | ({ type: 'milestone' } & MilestoneNotice)
   | { type: 'placement'; kind: BuildingKind; count: number }
+  | { type: 'completed'; id: string; kind: BuildingKind }
   | { type: 'delivery'; resource: Resource; amount: number; mode: 'worker' | 'barge' };
 export type DeliveryArrival = Extract<GameEvent, { type: 'delivery' }>;

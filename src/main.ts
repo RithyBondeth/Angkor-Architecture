@@ -19,6 +19,7 @@ import { WorldRenderer } from './rendering/WorldRenderer';
 import { applyTheme, createShell, HUD } from './ui/HUD';
 import { showWelcome } from './ui/Welcome';
 import './ui/strategy.css';
+import './ui/renovation.css';
 
 async function main() {
   applyTheme();
