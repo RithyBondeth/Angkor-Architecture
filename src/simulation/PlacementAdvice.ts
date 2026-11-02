@@ -3,6 +3,7 @@ import type { BuildingKind, GameState, Point } from '../core/types';
 import { footprint, neighbors, tileAt } from '../core/world';
 import { BUILDINGS } from '../data/buildings';
 import { remainingDeposit } from './Deposits';
+import { BEAUTY_REACH, homesNear } from './Beauty';
 import { ISSUE_TEXT, planDelivery } from './logisticsRules';
 import { WaterSimulation } from './WaterSimulation';
 import { workforce } from './Workforce';
@@ -59,6 +60,15 @@ export function placementAdvice(state: GameState, kind: BuildingKind, point: Poi
         `Needs ${BUILDINGS[kind].workers} operating workers; ${available} idle now. Builders and production share labor.`,
         true,
       );
+  }
+  if (BUILDINGS[kind].appeal) {
+    const homes = homesNear(projected, site);
+    add(
+      homes
+        ? `Delights ${homes} ${homes === 1 ? 'home' : 'homes'} nearby · +${BUILDINGS[kind].appeal} beauty`
+        : `No dwelling within ${BEAUTY_REACH} tiles · place it near homes to lift their mood`,
+      !homes,
+    );
   }
   if (['canal', 'moat', 'baray'].includes(kind)) {
     const adjacentWater = footprint(site).some((p) =>

@@ -1,3 +1,4 @@
+import { beauty, contentmentGain, growthInterval, shortageLossFactor } from './Beauty';
 import { CONFIG } from '../data/config';
 import { BUILDINGS } from '../data/buildings';
 import type { ChronicleEntry, GameState } from '../core/types';
@@ -68,6 +69,7 @@ export class Survival {
     const events: Event[] = [];
     const s = state.survival;
     const previousHunger = s.hunger;
+    const pleasant = beauty(state);
     const demand = foodDemand(state);
     const eaten = Math.min(state.resources.rice, demand);
     state.resources.rice -= eaten;
@@ -79,7 +81,7 @@ export class Survival {
         100,
         s.hunger + CONFIG.survival.hungerPerMissedMeal * (1 - s.lastFoodCoverage),
       );
-      state.happiness = Math.max(20, state.happiness - 2);
+      state.happiness = Math.max(20, state.happiness - 2 * shortageLossFactor(pleasant));
       if (s.shortageDays === 1)
         events.push({
           title: 'Food shortage',
@@ -90,7 +92,7 @@ export class Survival {
       s.shortageDays = 0;
       s.hunger = Math.max(0, s.hunger - CONFIG.survival.hungerRecovery);
       s.fedDays = s.hunger === 0 ? s.fedDays + 1 : 0;
-      state.happiness = Math.min(99, state.happiness + 0.1);
+      state.happiness = Math.min(99, state.happiness + contentmentGain(pleasant));
       if (previousHunger > 0 && s.hunger === 0)
         events.push({
           title: 'The city is fed again',
@@ -127,7 +129,7 @@ export class Survival {
     if (
       state.population > 0 &&
       s.fedDays >= 5 &&
-      s.fedDays % 3 === 0 &&
+      s.fedDays % growthInterval(pleasant) === 0 &&
       state.resources.rice >= foodDemand(state) * 5 &&
       state.population < housingCapacity(state)
     ) {
