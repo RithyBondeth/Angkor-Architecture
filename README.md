@@ -10,6 +10,24 @@
 
 </div>
 
+<!-- product-images:start -->
+
+## Product preview
+
+<p align="center">
+  <img src="docs/product-images/hero.png" alt="Angkor Architect — An isometric city-builder inspired by Khmer hydraulic engineering." width="100%">
+</p>
+
+<table>
+<tr>
+  <td width="33%"><img src="docs/product-images/feature-01.png" alt="A city begins with water. — A playable foundation for canals, reservoirs, and a growing settlement." width="100%"></td>
+  <td width="33%"><img src="docs/product-images/feature-02.png" alt="Shape the land. Guide the water. — A cellular simulation moves water across the city’s elevations." width="100%"></td>
+  <td width="33%"><img src="docs/product-images/feature-03.png" alt="Keep your city in your hands. — Local saves can be exported as JSON and brought back later." width="100%"></td>
+</tr>
+</table>
+
+<!-- product-images:end -->
+
 ---
 
 ## Overview
